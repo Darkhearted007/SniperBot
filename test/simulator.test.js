@@ -68,3 +68,37 @@ test('dashboard auth supports secret key and wallet-style signature', async () =
     else process.env.WALLET_AUTH_SALT = previousSalt;
   }
 });
+
+test('dashboard auth accepts percent-encoded secret key containing non-ASCII characters', async () => {
+  const previousSecret = process.env.DASHBOARD_SECRET_KEY;
+  const unicodeKey = 's\u00e9cret\u4e2d\u6587\ud83d\ude80'; // contains non-ISO-8859-1 code points
+  process.env.DASHBOARD_SECRET_KEY = unicodeKey;
+
+  try {
+    // require a fresh module instance so the new secret is picked up
+    const serverModPath = require.resolve('../src/dashboard/server');
+    delete require.cache[serverModPath];
+    const { createDashboardServer } = require('../src/dashboard/server');
+    const { simulator, logger } = buildApp();
+    const server = createDashboardServer({ simulator, logger });
+    await new Promise((resolve) => server.listen(0, resolve));
+    const port = server.address().port;
+
+    const encodedAuth = await fetch(`http://127.0.0.1:${port}/dashboard`, {
+      headers: { 'x-secret-key': encodeURIComponent(unicodeKey) }
+    });
+    assert.equal(encodedAuth.status, 200);
+
+    const wrongKey = await fetch(`http://127.0.0.1:${port}/dashboard`, {
+      headers: { 'x-secret-key': encodeURIComponent('wrongkey') }
+    });
+    assert.equal(wrongKey.status, 401);
+
+    await new Promise((resolve) => server.close(resolve));
+  } finally {
+    if (previousSecret === undefined) delete process.env.DASHBOARD_SECRET_KEY;
+    else process.env.DASHBOARD_SECRET_KEY = previousSecret;
+    const serverModPath = require.resolve('../src/dashboard/server');
+    delete require.cache[serverModPath];
+  }
+});

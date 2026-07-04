@@ -75,7 +75,7 @@ function SettingsScreen({ onConnect }) {
     setLoading(true);
     try {
       const headers = {};
-      if (trimKey) headers['x-secret-key'] = trimKey;
+      if (trimKey) headers['x-secret-key'] = encodeURIComponent(trimKey);
       const res = await fetch(`${trimUrl}/summary`, { headers });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -165,7 +165,7 @@ function DashboardScreen({ serverUrl, secretKey, initialData, onDisconnect }) {
     if (showRefreshing) setRefreshing(true);
     try {
       const headers = {};
-      if (secretKey) headers['x-secret-key'] = secretKey;
+      if (secretKey) headers['x-secret-key'] = encodeURIComponent(secretKey);
       const res = await fetch(`${serverUrl}/summary`, { headers });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));

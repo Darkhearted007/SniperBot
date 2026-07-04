@@ -437,7 +437,7 @@
   /* ── Fetch ── */
   async function fetchSummary() {
     const headers = {};
-    if (secretKey) headers['x-secret-key'] = secretKey;
+    if (secretKey) headers['x-secret-key'] = encodeURIComponent(secretKey);
     const res = await fetch(serverUrl + '/summary', { headers });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
