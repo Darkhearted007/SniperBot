@@ -250,7 +250,7 @@
     <div class="field">
       <label>Server URL</label>
       <input id="inp-url" type="url" placeholder="http://localhost:3000" autocomplete="off" spellcheck="false">
-      <p class="hint">e.g. http://192.168.1.x:3000 on your local network</p>
+      <p class="hint">e.g. <code>http://192.168.1.x:3000</code> locally, or <code>https://your-app.up.railway.app</code> on Railway</p>
     </div>
     <div class="field">
       <label>Secret Key</label>
@@ -592,6 +592,15 @@
     modalErr.classList.add('hidden');
     saveSettings();
     if (!serverUrl) { modalErr.textContent = 'Server URL is required.'; modalErr.classList.remove('hidden'); return; }
+    // Detect Railway project management URLs (railway.com/project/…) — these are the
+    // Railway web console URLs, not the deployed service URL.
+    if (/^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(serverUrl)) {
+      modalErr.textContent =
+        'That looks like a Railway project management URL, not your deployed service URL. ' +
+        'Use the public domain assigned to your service, e.g. https://your-app.up.railway.app';
+      modalErr.classList.remove('hidden');
+      return;
+    }
     btnSave.textContent = 'Testing…';
     btnSave.disabled = true;
     try {
