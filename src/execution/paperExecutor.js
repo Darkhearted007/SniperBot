@@ -11,6 +11,10 @@ class PaperExecutor {
       capitalSol: decision.sizeSol,
       tpPct: decision.tpPct,
       slPct: decision.slPct,
+      highPriceSeen: entryPrice,
+      // opportunity metadata stored for pattern analysis
+      liquidityUsd: opportunity.liquidityUsd,
+      momentumScore: opportunity.momentumScore,
       openedAt: new Date().toISOString()
     };
     state.bankrollSol -= decision.sizeSol;
@@ -25,7 +29,7 @@ class PaperExecutor {
     state.bankrollSol += proceeds;
     state.openPositions = state.openPositions.filter((p) => p.id !== position.id);
     state.realizedPnlSol += pnlSol;
-    return { positionId: position.id, priceNow, pnlSol, pnlPct, proceeds };
+    return { positionId: position.id, priceNow, pnlSol, pnlPct, proceeds, venue: position.venue };
   }
 }
 

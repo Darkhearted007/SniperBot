@@ -6,20 +6,21 @@ function todayUtc() {
 }
 
 class PaperTradingSimulator {
-  constructor({ strategy, executor, logger, learning, feed }) {
+  constructor({ strategy, executor, logger, learning, feed, config = RISK_CONFIG }) {
     this.strategy = strategy;
     this.executor = executor;
     this.logger = logger;
     this.learning = learning;
     this.feed = feed;
+    this.config = config;
     this.state = {
-      bankrollSol: RISK_CONFIG.startingBankrollSol,
+      bankrollSol: config.startingBankrollSol,
       openPositions: [],
       realizedPnlSol: 0,
       dailyLossPct: 0,
       drawdownPct: 0,
       circuitBreaker: false,
-      highWatermark: RISK_CONFIG.startingBankrollSol,
+      highWatermark: config.startingBankrollSol,
       realizedPnlTodaySol: 0,
       activeDay: todayUtc()
     };
@@ -36,7 +37,7 @@ class PaperTradingSimulator {
 
   processOpportunity(opportunity) {
     this.resetDailyIfNeeded();
-    const safety = runSafetyChecks(opportunity);
+    const safety = runSafetyChecks(opportunity, this.config);
     const decision = this.strategy.decide({ state: this.state, opportunity, safety });
     this.logger.logDecision({ opportunity, safety, decision, state: { bankrollSol: this.state.bankrollSol } });
 
@@ -68,12 +69,13 @@ class PaperTradingSimulator {
         this.logger.logExecution({ kind: 'exit', position, execution, exitDecision });
       }
     }
+    const cfg = this.config;
     const equity = this.state.bankrollSol + this.state.openPositions.reduce((sum, p) => sum + p.capitalSol, 0);
-    const baselineWatermark = this.state.highWatermark > 0 ? this.state.highWatermark : Math.max(RISK_CONFIG.startingBankrollSol, Number.EPSILON);
+    const baselineWatermark = this.state.highWatermark > 0 ? this.state.highWatermark : Math.max(cfg.startingBankrollSol, Number.EPSILON);
     this.state.highWatermark = Math.max(baselineWatermark, equity);
     this.state.drawdownPct = 1 - (equity / this.state.highWatermark);
-    this.state.dailyLossPct = Math.max(0, -this.state.realizedPnlTodaySol / RISK_CONFIG.startingBankrollSol);
-    if (this.state.drawdownPct >= RISK_CONFIG.maxDrawdownPct) this.state.circuitBreaker = true;
+    this.state.dailyLossPct = Math.max(0, -this.state.realizedPnlTodaySol / cfg.startingBankrollSol);
+    if (this.state.drawdownPct >= cfg.maxDrawdownPct) this.state.circuitBreaker = true;
   }
 
   runCycle() {
