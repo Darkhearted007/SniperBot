@@ -1,0 +1,23 @@
+{
+  "name": "sniperbot",
+  "version": "1.0.0",
+  "description": "Strategic multi-venue sniper bot with learning-first paper trading",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dashboard": "node src/dashboard/server.js",
+    "test": "node --test",
+    "ci": "npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Darkhearted007/SniperBot.git"
+  },
+  "keywords": ["sniper", "solana", "raydium", "pumpfun", "bsc", "paper-trading"],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Darkhearted007/SniperBot/issues"
+  },
+  "homepage": "https://github.com/Darkhearted007/SniperBot#readme"
+}
