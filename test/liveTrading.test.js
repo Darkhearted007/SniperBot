@@ -5,6 +5,8 @@ const { parseLiveTradingConfig } = require('../src/live/config');
 const { parseWalletSecretBytes } = require('../src/live/solanaRpcClient');
 const { SolanaWatchlistFeed } = require('../src/market/solanaWatchlistFeed');
 const { SolanaLiveExecutor } = require('../src/execution/solanaLiveExecutor');
+const { LiveTradingBot } = require('../src/live/liveTradingBot');
+const { TradeApprovalQueue } = require('../src/live/tradeApprovalQueue');
 
 test('parseLiveTradingConfig parses live env and normalizes watchlist', () => {
   const config = parseLiveTradingConfig({
@@ -36,6 +38,37 @@ test('parseLiveTradingConfig parses live env and normalizes watchlist', () => {
   assert.equal(config.pollIntervalMs, 12000);
   assert.equal(config.minSolReserve, 0.05);
   assert.equal(config.maxBankrollSol, 1.25);
+});
+
+test('parseLiveTradingConfig supports automated watchlists and supervised mode', () => {
+  const config = parseLiveTradingConfig({
+    TRADING_MODE: 'live',
+    SOLANA_RPC_URL: 'https://rpc.example',
+    SOLANA_WALLET_SECRET: Buffer.alloc(64, 7).toString('base64'),
+    SOLANA_AUTO_WATCHLIST_JSON: JSON.stringify([
+      {
+        symbol: 'BONK',
+        outputMint: 'mint-bonk',
+        decimals: 5,
+        liquidityUsd: 123456,
+        rugScore: 0.2
+      },
+      {
+        symbol: 'WIF',
+        outputMint: 'mint-wif',
+        decimals: 6,
+        liquidityUsd: 654321,
+        rugScore: 0.1
+      }
+    ]),
+    LIVE_AUTO_WATCHLIST_SIZE: '1',
+    LIVE_REQUIRE_SUPERVISION: 'true'
+  });
+
+  assert.equal(config.watchlist.length, 0);
+  assert.equal(config.watchlistCandidates.length, 2);
+  assert.equal(config.autoWatchlistSize, 1);
+  assert.equal(config.supervisionMode, true);
 });
 
 test('parseWalletSecretBytes accepts 64-byte base64 and JSON array formats', () => {
@@ -81,6 +114,77 @@ test('SolanaWatchlistFeed converts Jupiter quotes into opportunities', async () 
   assert.equal(opportunity.price, 0.015);
   assert.equal(opportunity.momentumScore, 0.7);
   assert.equal(opportunity.volatilityRisk, 0.12);
+});
+
+test('SolanaWatchlistFeed auto-selects the highest-ranked candidates', async () => {
+  const quotesByMint = {
+    'mint-bonk': '15000000',
+    'mint-wif': '9000000',
+    'mint-pepe': '7000000'
+  };
+  const fetchImpl = async (url) => {
+    const inputMint = new URL(String(url)).searchParams.get('inputMint');
+    return {
+      ok: true,
+      async text() {
+        return JSON.stringify({
+          inAmount: '1000000',
+          outAmount: quotesByMint[inputMint]
+        });
+      }
+    };
+  };
+
+  const feed = new SolanaWatchlistFeed({
+    watchlist: [],
+    watchlistCandidates: [
+      {
+        symbol: 'BONK',
+        tokenName: 'Bonk',
+        pair: 'SOL/BONK',
+        venue: 'solana/jupiter',
+        inputMint: 'So11111111111111111111111111111111111111112',
+        outputMint: 'mint-bonk',
+        decimals: 6,
+        liquidityUsd: 900000,
+        rugScore: 0.05,
+        baselineMomentumScore: 0.9,
+        volatilityRisk: 0.1
+      },
+      {
+        symbol: 'WIF',
+        tokenName: 'Wif',
+        pair: 'SOL/WIF',
+        venue: 'solana/jupiter',
+        inputMint: 'So11111111111111111111111111111111111111112',
+        outputMint: 'mint-wif',
+        decimals: 6,
+        liquidityUsd: 600000,
+        rugScore: 0.15,
+        baselineMomentumScore: 0.75,
+        volatilityRisk: 0.12
+      },
+      {
+        symbol: 'PEPE',
+        tokenName: 'Pepe',
+        pair: 'SOL/PEPE',
+        venue: 'solana/jupiter',
+        inputMint: 'So11111111111111111111111111111111111111112',
+        outputMint: 'mint-pepe',
+        decimals: 6,
+        liquidityUsd: 250000,
+        rugScore: 0.35,
+        baselineMomentumScore: 0.55,
+        volatilityRisk: 0.25
+      }
+    ],
+    autoWatchlistSize: 2,
+    fetchImpl
+  });
+
+  const opportunities = await feed.list();
+  assert.equal(opportunities.length, 2);
+  assert.deepEqual(feed.getActiveWatchlist().map((token) => token.symbol), ['BONK', 'WIF']);
 });
 
 test('SolanaLiveExecutor enter and exit update state from mocked Jupiter swaps', async () => {
@@ -155,4 +259,84 @@ test('SolanaLiveExecutor enter and exit update state from mocked Jupiter swaps',
   assert.ok(Math.abs(state.realizedPnlSol - 0.02) < 1e-9);
   assert.equal(exit.proceeds, 0.12);
   assert.equal(state.bankrollSol, 1.02);
+});
+
+test('LiveTradingBot queues and approves supervised entry and exit decisions', async () => {
+  const approvalQueue = new TradeApprovalQueue();
+  let learned = 0;
+  const executor = {
+    async getInitialBankrollSol() {
+      return 1;
+    },
+    async syncBankroll() {},
+    async enter(state, opportunity, decision) {
+      const position = {
+        id: 'position-1',
+        pair: opportunity.pair,
+        entryPrice: 1,
+        quantity: 1,
+        capitalSol: decision.sizeSol,
+        tpPct: decision.tpPct,
+        slPct: decision.slPct,
+        highPriceSeen: 1,
+        venue: opportunity.venue
+      };
+      state.bankrollSol -= decision.sizeSol;
+      state.openPositions.push(position);
+      return { position, signature: 'sig-enter' };
+    },
+    async exit(state, position) {
+      state.openPositions = state.openPositions.filter((candidate) => candidate.id !== position.id);
+      state.bankrollSol += 0.25;
+      state.realizedPnlSol += 0.05;
+      return { positionId: position.id, pnlSol: 0.05, pnlPct: 0.25, proceeds: 0.25, signature: 'sig-exit' };
+    }
+  };
+  const bot = new LiveTradingBot({
+    strategy: {
+      config: {},
+      decide() {
+        return { action: 'ENTER', sizeSol: 0.2, tpPct: 0.3, slPct: 0.1 };
+      },
+      exitDecision() {
+        return { action: 'EXIT', reason: 'take-profit', pnlPct: 0.25 };
+      }
+    },
+    executor,
+    logger: {
+      logDecision() {},
+      logExecution() {}
+    },
+    learning: {
+      learn() {
+        learned += 1;
+      }
+    },
+    feed: { getActiveWatchlist() { return []; } },
+    goalAgent: null,
+    supervisionMode: true,
+    approvalQueue
+  });
+
+  await bot.initialize();
+  await bot.processOpportunity({
+    pair: 'SOL/BONK',
+    venue: 'solana/jupiter',
+    liquidityUsd: 100000,
+    rugScore: 0.1,
+    momentumScore: 0.9,
+    volatilityRisk: 0.1
+  });
+  assert.equal(bot.getPendingDecisions().length, 1);
+  assert.equal(bot.state.openPositions.length, 0);
+
+  await bot.approvePendingDecision(bot.getPendingDecisions()[0].id);
+  assert.equal(bot.state.openPositions.length, 1);
+
+  await bot.processMarketTick({ 'SOL/BONK': 1.25 });
+  assert.equal(bot.getPendingDecisions().length, 1);
+
+  await bot.approvePendingDecision(bot.getPendingDecisions()[0].id);
+  assert.equal(bot.state.openPositions.length, 0);
+  assert.equal(learned, 1);
 });

@@ -6,7 +6,7 @@ Strategic, learning-first sniper bot architecture for newly created pairs across
 - BSC (PancakeSwap-compatible feed)
 
 This implementation is **paper-trading first** and starts simulation bankroll at **0.1 SOL**.
-It also includes an **opt-in Solana live-trading mode** for a manually curated watchlist.
+It also includes an **opt-in Solana live-trading mode** for a curated Solana universe with optional automated watchlist selection and supervised execution.
 
 [![Deploy Dashboard to Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Darkhearted007/SniperBot)
 
@@ -65,7 +65,8 @@ Live mode is disabled by default. Enable it with `TRADING_MODE=live`.
 - `TRADING_MODE=live`
 - `SOLANA_RPC_URL` – Solana RPC HTTPS endpoint
 - `SOLANA_WALLET_SECRET` – wallet secret as a 64-byte JSON array or base64-encoded 64-byte keypair
-- `SOLANA_WATCHLIST_JSON` – JSON array of tokens to monitor
+- `SOLANA_WATCHLIST_JSON` – JSON array of tokens to monitor directly
+- `SOLANA_AUTO_WATCHLIST_JSON` – optional JSON array of candidate tokens for automatic watchlist selection
 - each watchlist item should use a practical token `decimals` value between `0` and `18`
 
 Example:
@@ -96,6 +97,8 @@ npm start
 - `LIVE_POLL_INTERVAL_MS` – default `15000`
 - `LIVE_MIN_SOL_RESERVE` – default `0.02`
 - `LIVE_MAX_BANKROLL_SOL` – optional cap for strategy sizing
+- `LIVE_AUTO_WATCHLIST_SIZE` – top candidate count to keep in the active watchlist
+- `LIVE_REQUIRE_SUPERVISION` – require manual approval before live entries and exits are executed
 - `LIVE_SLIPPAGE_BPS` – default `100`
 - `JUPITER_QUOTE_API_BASE`
 - `JUPITER_SWAP_API_BASE`
@@ -103,10 +106,11 @@ npm start
 ### Live-mode behavior
 
 - Live mode is currently **Solana only**
-- It trades a **manual watchlist**, not automatic new-pair discovery
+- It can trade a fixed watchlist or automatically rank a configured candidate list into an active watchlist each cycle
 - Quotes and swap transactions are requested from Jupiter
 - The bot expects a dedicated SOL-funded wallet; pre-existing token holdings are not imported into bot state
 - `SOLANA_WATCHLIST_JSON` should include `liquidityUsd` and `rugScore`; missing values default to conservative safety values and will usually block entries
+- Supervised mode queues entry and exit decisions until an authenticated operator approves or rejects them through the dashboard API
 
 ## Web Dashboard
 
@@ -206,6 +210,9 @@ vercel --prod
 | `GET` | `/dashboard` | ✓ | Core simulator state + recent logs |
 | `GET` | `/agents` | ✓ | Goal status + variant summary |
 | `GET` | `/summary` | ✓ | Combined data (used by web & mobile dashboards) |
+| `GET` | `/pending-decisions` | ✓ | Pending supervised trade decisions + recent approval history |
+| `POST` | `/decisions/approve` | ✓ | Approve a pending supervised decision |
+| `POST` | `/decisions/reject` | ✓ | Reject a pending supervised decision |
 
 Authentication (one of):
 1. Secret-key header:

@@ -13,6 +13,7 @@ const { PatternAgent } = require('./agents/patternAgent');
 const { StrategyVariantAgent } = require('./agents/strategyVariantAgent');
 const { LiveTradingBot } = require('./live/liveTradingBot');
 const { SolanaRpcClient } = require('./live/solanaRpcClient');
+const { TradeApprovalQueue } = require('./live/tradeApprovalQueue');
 const { getTradingMode, parseLiveTradingConfig } = require('./live/config');
 
 function buildApp() {
@@ -59,16 +60,21 @@ async function buildLiveApp(env = process.env) {
   });
   const feed = new SolanaWatchlistFeed({
     watchlist: liveConfig.watchlist,
+    watchlistCandidates: liveConfig.watchlistCandidates,
+    autoWatchlistSize: liveConfig.autoWatchlistSize,
     quoteApiBase: liveConfig.quoteApiBase,
     slippageBps: liveConfig.slippageBps
   });
+  const approvalQueue = new TradeApprovalQueue();
   const bot = new LiveTradingBot({
     strategy,
     executor,
     logger,
     learning,
     feed,
-    goalAgent
+    goalAgent,
+    supervisionMode: liveConfig.supervisionMode,
+    approvalQueue
   });
   await bot.initialize();
 

@@ -25,6 +25,15 @@ function parseRequiredJsonArray(value, fieldName) {
   return parsed;
 }
 
+function parseOptionalJsonArray(value, fieldName) {
+  if (!value) return [];
+  return parseRequiredJsonArray(value, fieldName);
+}
+
+function parseBoolean(value) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
+}
+
 function normalizeWatchlistItem(item, index) {
   if (!item || typeof item !== 'object') {
     throw new Error(`SOLANA_WATCHLIST_JSON[${index}] must be an object`);
@@ -84,25 +93,43 @@ function parseLiveTradingConfig(env = process.env) {
     throw new Error('SOLANA_WALLET_SECRET is required in live mode');
   }
 
-  const watchlist = parseRequiredJsonArray(env.SOLANA_WATCHLIST_JSON, 'SOLANA_WATCHLIST_JSON')
+  const watchlist = parseOptionalJsonArray(env.SOLANA_WATCHLIST_JSON, 'SOLANA_WATCHLIST_JSON')
     .map(normalizeWatchlistItem);
+  const watchlistCandidates = parseOptionalJsonArray(
+    env.SOLANA_AUTO_WATCHLIST_JSON,
+    'SOLANA_AUTO_WATCHLIST_JSON'
+  ).map(normalizeWatchlistItem);
+  if (watchlist.length === 0 && watchlistCandidates.length === 0) {
+    throw new Error('SOLANA_WATCHLIST_JSON or SOLANA_AUTO_WATCHLIST_JSON is required in live mode');
+  }
 
   const slippageBps = parseOptionalNumber(env.LIVE_SLIPPAGE_BPS, 'LIVE_SLIPPAGE_BPS') ?? 100;
   const pollIntervalMs = parseOptionalNumber(env.LIVE_POLL_INTERVAL_MS, 'LIVE_POLL_INTERVAL_MS') ?? 15_000;
   const minSolReserve = parseOptionalNumber(env.LIVE_MIN_SOL_RESERVE, 'LIVE_MIN_SOL_RESERVE') ?? 0.02;
   const maxBankrollSol = parseOptionalNumber(env.LIVE_MAX_BANKROLL_SOL, 'LIVE_MAX_BANKROLL_SOL');
+  const autoWatchlistSizeRaw = parseOptionalNumber(env.LIVE_AUTO_WATCHLIST_SIZE, 'LIVE_AUTO_WATCHLIST_SIZE');
+  if (autoWatchlistSizeRaw != null && (!Number.isInteger(autoWatchlistSizeRaw) || autoWatchlistSizeRaw < 1)) {
+    throw new Error('LIVE_AUTO_WATCHLIST_SIZE must be a positive integer');
+  }
+  const autoWatchlistSize = watchlistCandidates.length > 0
+    ? Math.min(autoWatchlistSizeRaw ?? watchlistCandidates.length, watchlistCandidates.length)
+    : null;
+  const supervisionMode = parseBoolean(env.LIVE_REQUIRE_SUPERVISION ?? env.LIVE_SUPERVISION_MODE);
 
   return {
     mode,
     rpcUrl,
     walletSecret,
     watchlist,
+    watchlistCandidates,
+    autoWatchlistSize,
     quoteApiBase: env.JUPITER_QUOTE_API_BASE || DEFAULT_JUPITER_QUOTE_API,
     swapApiBase: env.JUPITER_SWAP_API_BASE || DEFAULT_JUPITER_SWAP_API,
     slippageBps,
     pollIntervalMs,
     minSolReserve,
-    maxBankrollSol
+    maxBankrollSol,
+    supervisionMode
   };
 }
 

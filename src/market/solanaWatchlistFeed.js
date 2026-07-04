@@ -5,6 +5,11 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function scoreOpportunity(opportunity) {
+  const liquidityBonus = clamp(Math.log10(Math.max(opportunity.liquidityUsd || 1, 1)) / 10, 0, 1) * 0.15;
+  return opportunity.momentumScore - opportunity.volatilityRisk - opportunity.rugScore + liquidityBonus;
+}
+
 function stddev(values) {
   if (values.length === 0) return 0;
   const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -15,15 +20,20 @@ function stddev(values) {
 class SolanaWatchlistFeed {
   constructor({
     watchlist,
+    watchlistCandidates = [],
+    autoWatchlistSize = null,
     fetchImpl = fetch,
     quoteApiBase,
     slippageBps = 100
   }) {
     this.watchlist = watchlist;
+    this.watchlistCandidates = watchlistCandidates;
+    this.autoWatchlistSize = autoWatchlistSize;
     this.fetchImpl = fetchImpl;
     this.quoteApiBase = quoteApiBase;
     this.slippageBps = slippageBps;
     this.history = new Map();
+    this.activeWatchlist = watchlist;
   }
 
   async fetchOpportunity(token) {
@@ -73,17 +83,34 @@ class SolanaWatchlistFeed {
   }
 
   async list() {
-    const settled = await Promise.allSettled(this.watchlist.map((token) => this.fetchOpportunity(token)));
-    const opportunities = settled
-      .filter((result) => result.status === 'fulfilled')
-      .map((result) => result.value);
+    const sourceWatchlist = this.watchlistCandidates.length > 0 ? this.watchlistCandidates : this.watchlist;
+    const settled = await Promise.allSettled(sourceWatchlist.map((token) => this.fetchOpportunity(token)));
+    const opportunities = settled.flatMap((result, index) => {
+      if (result.status !== 'fulfilled') return [];
+      return [{
+        opportunity: result.value,
+        token: sourceWatchlist[index],
+        score: scoreOpportunity(result.value)
+      }];
+    });
 
     if (opportunities.length === 0) {
       const firstError = settled.find((result) => result.status === 'rejected');
       throw firstError ? firstError.reason : new Error('No live opportunities available');
     }
 
-    return opportunities;
+    const ranked = this.watchlistCandidates.length > 0
+      ? [...opportunities]
+        .sort((left, right) => right.score - left.score)
+        .slice(0, this.autoWatchlistSize ?? opportunities.length)
+      : opportunities;
+
+    this.activeWatchlist = ranked.map((entry) => entry.token);
+    return ranked.map((entry) => entry.opportunity);
+  }
+
+  getActiveWatchlist() {
+    return this.activeWatchlist;
   }
 }
 
