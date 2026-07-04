@@ -103,6 +103,40 @@ test('dashboard auth accepts percent-encoded secret key containing non-ASCII cha
   }
 });
 
+test('dashboard auth trims whitespace from DASHBOARD_SECRET_KEY env var', async () => {
+  const previousSecret = process.env.DASHBOARD_SECRET_KEY;
+  process.env.DASHBOARD_SECRET_KEY = '  mykey\n'; // simulate env var with surrounding whitespace
+
+  try {
+    const serverModPath = require.resolve('../src/dashboard/server');
+    delete require.cache[serverModPath];
+    const { createDashboardServer } = require('../src/dashboard/server');
+    const { simulator, logger } = buildApp();
+    const server = createDashboardServer({ simulator, logger });
+    await new Promise((resolve) => server.listen(0, resolve));
+    const port = server.address().port;
+
+    // Key without surrounding whitespace should be accepted (percent-encoded)
+    const trimmedAuth = await fetch(`http://127.0.0.1:${port}/dashboard`, {
+      headers: { 'x-secret-key': encodeURIComponent('mykey') }
+    });
+    assert.equal(trimmedAuth.status, 200);
+
+    // Also works when the key is sent without URI encoding (plain ASCII key)
+    const rawAuth = await fetch(`http://127.0.0.1:${port}/dashboard`, {
+      headers: { 'x-secret-key': 'mykey' }
+    });
+    assert.equal(rawAuth.status, 200);
+
+    await new Promise((resolve) => server.close(resolve));
+  } finally {
+    if (previousSecret === undefined) delete process.env.DASHBOARD_SECRET_KEY;
+    else process.env.DASHBOARD_SECRET_KEY = previousSecret;
+    const serverModPath = require.resolve('../src/dashboard/server');
+    delete require.cache[serverModPath];
+  }
+});
+
 test('dashboard exposes supervised decision endpoints when available', async () => {
   const previousSecret = process.env.DASHBOARD_SECRET_KEY;
   process.env.DASHBOARD_SECRET_KEY = 'abc123';

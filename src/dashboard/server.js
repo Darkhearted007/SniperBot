@@ -30,8 +30,8 @@ function readJsonBody(req) {
 }
 
 function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
-  const secret = process.env.DASHBOARD_SECRET_KEY;
-  const walletSalt = process.env.WALLET_AUTH_SALT;
+  const secret = (process.env.DASHBOARD_SECRET_KEY || '').trim() || undefined;
+  const walletSalt = (process.env.WALLET_AUTH_SALT || '').trim() || undefined;
 
   function cors(res) {
     res.setHeader('Access-Control-Allow-Origin', '*');

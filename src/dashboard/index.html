@@ -426,7 +426,7 @@
     // secretKey is intentionally NOT saved to storage
   }
   function openModal() {
-    inpUrl.value = serverUrl || 'http://localhost:3000';
+    inpUrl.value = serverUrl || window.location.origin;
     inpKey.value = secretKey;
     modalErr.classList.add('hidden');
     // If the saved URL is a Railway project management URL, warn the user immediately.
