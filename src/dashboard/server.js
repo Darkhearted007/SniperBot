@@ -8,7 +8,7 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(aBuf, bBuf);
 }
 
-function createDashboardServer({ simulator, logger }) {
+function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
   const secret = process.env.DASHBOARD_SECRET_KEY;
   const walletSalt = process.env.WALLET_AUTH_SALT;
 
@@ -51,6 +51,14 @@ function createDashboardServer({ simulator, logger }) {
         },
         recentLogs: logger.all().slice(-25)
       }));
+      return;
+    }
+
+    if (req.url === '/agents') {
+      const goalStatus = goalAgent ? goalAgent.summary(simulator.state) : null;
+      const variantSummary = variantAgent ? variantAgent.getSummary() : null;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ goalStatus, variantSummary }));
       return;
     }
 
