@@ -433,6 +433,10 @@
       sessionStorage.removeItem(KEY_SESSION);
     }
   }
+  function clearWalletSession() {
+    sessionToken = '';
+    sessionStorage.removeItem(KEY_SESSION);
+  }
   function openModal() {
     inpUrl.value = serverUrl || window.location.origin;
     inpKey.value = secretKey;
@@ -650,9 +654,11 @@
       lastUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
     } catch (e) {
       if (/Unauthorized/i.test(e.message)) {
-        sessionToken = '';
-        sessionStorage.removeItem(KEY_SESSION);
+        const hadSessionToken = Boolean(sessionToken);
+        clearWalletSession();
         clearInterval(refreshTimer);
+        refreshTimer = null;
+        if (hadSessionToken) openModal();
       }
       setStatus('error', 'Error');
       setError('Could not reach ' + serverUrl + ' — ' + e.message);
