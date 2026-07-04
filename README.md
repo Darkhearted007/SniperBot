@@ -6,6 +6,7 @@ Strategic, learning-first sniper bot architecture for newly created pairs across
 - BSC (PancakeSwap-compatible feed)
 
 This implementation is **paper-trading first** and starts simulation bankroll at **0.1 SOL**.
+It also includes an **opt-in Solana live-trading mode** for a manually curated watchlist.
 
 [![Deploy Dashboard to Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Darkhearted007/SniperBot)
 
@@ -16,6 +17,7 @@ This implementation is **paper-trading first** and starts simulation bankroll at
   - Token safety/risk checks
   - Strategy engine (entry/exit + confidence + dynamic TP/SL)
   - Paper execution engine
+  - Solana live execution engine
   - Learning engine
   - Decision/execution logging
   - Simple dashboard API with wallet or secret-key auth
@@ -36,9 +38,10 @@ This implementation is **paper-trading first** and starts simulation bankroll at
 - `src/market` – opportunity discovery feed
 - `src/safety` – token safety screening
 - `src/strategy` – decision logic and exits
-- `src/execution` – paper trade execution
+- `src/execution` – paper and live trade execution
 - `src/learning` – logging + adaptive scoring
 - `src/simulator` – orchestrated testable simulation
+- `src/live` – Solana live-mode config and RPC helpers
 - `src/dashboard` – minimal authenticated dashboard API
 
 ## Run
@@ -49,6 +52,60 @@ DASHBOARD_SECRET_KEY=mysecret npm start
 ```
 
 The bot runs a simulation loop and starts the dashboard API + web UI on port 3000 (configurable via `PORT`).
+
+## Live Solana trading
+
+> **Warning**
+> Live mode sends real on-chain swaps from your wallet. Use a dedicated wallet and start with a very small bankroll cap.
+
+Live mode is disabled by default. Enable it with `TRADING_MODE=live`.
+
+### Required environment variables
+
+- `TRADING_MODE=live`
+- `SOLANA_RPC_URL` – Solana RPC HTTPS endpoint
+- `SOLANA_WALLET_SECRET` – wallet secret as a 64-byte JSON array or base64-encoded 64-byte keypair
+- `SOLANA_WATCHLIST_JSON` – JSON array of tokens to monitor
+
+Example:
+
+```bash
+TRADING_MODE=live \
+SOLANA_RPC_URL=https://your-rpc.example \
+SOLANA_WALLET_SECRET='[12,34,...]' \
+SOLANA_WATCHLIST_JSON='[
+  {
+    "symbol":"BONK",
+    "tokenName":"Bonk",
+    "outputMint":"DezXAZ8z7PnrnRJjz3wXBoRgixCa6YaB1pPB263yPB263",
+    "decimals":5,
+    "liquidityUsd":1000000,
+    "rugScore":0.15
+  }
+]' \
+LIVE_MIN_SOL_RESERVE=0.05 \
+LIVE_MAX_BANKROLL_SOL=0.25 \
+LIVE_SLIPPAGE_BPS=100 \
+DASHBOARD_SECRET_KEY=mysecret \
+npm start
+```
+
+### Optional environment variables
+
+- `LIVE_POLL_INTERVAL_MS` – default `15000`
+- `LIVE_MIN_SOL_RESERVE` – default `0.02`
+- `LIVE_MAX_BANKROLL_SOL` – optional cap for strategy sizing
+- `LIVE_SLIPPAGE_BPS` – default `100`
+- `JUPITER_QUOTE_API_BASE`
+- `JUPITER_SWAP_API_BASE`
+
+### Live-mode behavior
+
+- Live mode is currently **Solana only**
+- It trades a **manual watchlist**, not automatic new-pair discovery
+- Quotes and swap transactions are requested from Jupiter
+- The bot expects a dedicated SOL-funded wallet; pre-existing token holdings are not imported into bot state
+- `SOLANA_WATCHLIST_JSON` should include `liquidityUsd` and `rugScore`; missing values default to conservative safety values and will usually block entries
 
 ## Web Dashboard
 
