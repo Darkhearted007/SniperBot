@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "SniperBot Dashboard",
+    "slug": "sniperbot-dashboard",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "sniperbot",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0a0a0f"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sniperbot.dashboard"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0a0f"
+      },
+      "package": "com.sniperbot.dashboard"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
