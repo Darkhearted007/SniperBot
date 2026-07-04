@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dashboard": "node src/dashboard/server.js",
+    "build": "node -e \"const fs=require('fs');fs.mkdirSync('public',{recursive:true});fs.copyFileSync('src/dashboard/index.html','public/index.html');console.log('Dashboard copied to public/');\"",
     "test": "node --test",
     "ci": "npm test"
   },

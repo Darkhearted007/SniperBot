@@ -7,6 +7,8 @@ Strategic, learning-first sniper bot architecture for newly created pairs across
 
 This implementation is **paper-trading first** and starts simulation bankroll at **0.1 SOL**.
 
+[![Deploy Dashboard to Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Darkhearted007/SniperBot)
+
 ## Core capabilities
 
 - Event-driven modular architecture:
@@ -43,17 +45,114 @@ This implementation is **paper-trading first** and starts simulation bankroll at
 
 ```bash
 npm install
-npm start
+DASHBOARD_SECRET_KEY=mysecret npm start
 ```
 
-Dashboard endpoints:
-- `GET /health`
-- `GET /dashboard`
+The bot runs a simulation loop and starts the dashboard API + web UI on port 3000 (configurable via `PORT`).
+
+## Web Dashboard
+
+Open **`http://localhost:3000/`** in any browser after starting the bot.
+
+On first visit a connection dialog appears — enter:
+- **Server URL** – `http://localhost:3000` (or your machine's LAN IP for remote access)
+- **Secret Key** – the value of `DASHBOARD_SECRET_KEY`
+
+The dashboard auto-refreshes every 3 seconds and shows:
+- Goal progress bar (0.1 → 2.0 SOL)
+- Bankroll, realized PnL, circuit-breaker status
+- Drawdown and daily-loss risk gauges
+- Strategy variant performance table
+- Open positions and recent trade logs
+
+## Mobile Dashboard (Expo Go)
+
+A React Native app in `mobile/` lets testers monitor the bot from any iOS or Android device using [Expo Go](https://expo.dev/go).
+
+### Setup
+
+```bash
+cd mobile
+npm install
+npx expo start
+```
+
+Expo will print a QR code in the terminal. Scan it with:
+- **iOS**: the Camera app
+- **Android**: the Expo Go app
+
+### First launch
+
+Enter the bot's **Server URL** using your machine's local IP address (not `localhost`), e.g.:
+
+```
+http://192.168.1.42:3000
+```
+
+> Tip: find your machine's LAN IP with `ipconfig` (Windows) or `ifconfig` / `ip addr` (macOS/Linux).
+
+### Publish a shareable Expo Go link
+
+To get a permanent link your testers can open without cloning the repo, use [EAS Update](https://docs.expo.dev/eas-update/getting-started/):
+
+```bash
+cd mobile
+npm install -g eas-cli     # install the EAS CLI once
+npx eas login              # log in to your Expo account
+npx eas update --branch production --message "initial release"
+```
+
+After publishing, EAS prints a shareable URL that testers can open directly in Expo Go.
+
+Alternatively, for quick local sharing during development, run `npx expo start` and share the printed QR code or the `exp://` URL with testers on the same network.
+
+## Hosting the dashboard on Vercel
+
+The web dashboard (`src/dashboard/index.html`) is a fully static file — no server required. You can host it on Vercel so testers can reach it from any device without running the bot locally.
+
+### One-click deploy
+
+Click the button at the top of this README, or go to:
+
+```
+https://vercel.com/new/clone?repository-url=https://github.com/Darkhearted007/SniperBot
+```
+
+Vercel will clone the repo, run `npm run build` (which copies `src/dashboard/index.html` → `public/index.html`), and publish the result.
+
+### Manual deploy via CLI
+
+```bash
+npm install -g vercel   # install the Vercel CLI once
+vercel login
+vercel --prod
+```
+
+### After deploying
+
+1. Open your Vercel URL (e.g. `https://sniperbot-dashboard.vercel.app`)
+2. The settings modal opens automatically — enter:
+   - **Server URL**: the public address of your running bot  
+     (e.g. `https://your-vps.example.com:3000` or your ngrok URL)
+   - **Secret Key**: the value of `DASHBOARD_SECRET_KEY`
+3. Click **Connect** — the dashboard starts polling your bot in real time
+
+> **Note:** The bot itself (simulation loop + API) must run on a persistent host such as a VPS, home server, or a tunnel like [ngrok](https://ngrok.com/) / [Cloudflare Tunnel](https://www.cloudflare.com/products/tunnel/). Vercel only hosts the static UI.
+
+## API endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/` | ✗ public | Web dashboard UI |
+| `GET` | `/health` | ✓ | Liveness check |
+| `GET` | `/dashboard` | ✓ | Core simulator state + recent logs |
+| `GET` | `/agents` | ✓ | Goal status + variant summary |
+| `GET` | `/summary` | ✓ | Combined data (used by web & mobile dashboards) |
 
 Authentication (one of):
 1. Secret-key header:
    - Set `DASHBOARD_SECRET_KEY`
-   - Send `x-secret-key`
+   - Send `x-secret-key: <key>`
 2. Wallet-style challenge signature headers:
    - Set `WALLET_AUTH_SALT`
    - Send `x-wallet-address`, `x-wallet-challenge`, `x-wallet-signature`
