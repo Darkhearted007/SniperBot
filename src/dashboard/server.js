@@ -10,6 +10,25 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(aBuf, bBuf);
 }
 
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      if (chunks.length === 0) {
+        resolve({});
+        return;
+      }
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      } catch (error) {
+        reject(new Error(`Invalid JSON body: ${error.message}`));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
 function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
   const secret = process.env.DASHBOARD_SECRET_KEY;
   const walletSalt = process.env.WALLET_AUTH_SALT;
@@ -20,7 +39,7 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
       'Access-Control-Allow-Headers',
       'x-secret-key, x-wallet-address, x-wallet-challenge, x-wallet-signature, content-type'
     );
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   }
 
   function auth(req) {
@@ -39,7 +58,20 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
     return safeEqual(signature, expected);
   }
 
+  function getPendingDecisions() {
+    return typeof simulator.getPendingDecisions === 'function' ? simulator.getPendingDecisions() : [];
+  }
+
+  function getDecisionHistory() {
+    return typeof simulator.getDecisionHistory === 'function' ? simulator.getDecisionHistory() : [];
+  }
+
+  function getActiveWatchlist() {
+    return typeof simulator.getActiveWatchlist === 'function' ? simulator.getActiveWatchlist() : [];
+  }
+
   const server = http.createServer((req, res) => {
+    void (async () => {
     cors(res);
 
     // Handle CORS preflight
@@ -81,6 +113,8 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
         bankrollSol: simulator.state.bankrollSol,
         realizedPnlSol: simulator.state.realizedPnlSol,
         openPositions: simulator.state.openPositions,
+        pendingDecisions: getPendingDecisions(),
+        activeWatchlist: getActiveWatchlist(),
         strategyHealth: {
           dailyLossPct: simulator.state.dailyLossPct,
           drawdownPct: simulator.state.drawdownPct,
@@ -108,6 +142,8 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
         bankrollSol: simulator.state.bankrollSol,
         realizedPnlSol: simulator.state.realizedPnlSol,
         openPositions: simulator.state.openPositions,
+        pendingDecisions: getPendingDecisions(),
+        activeWatchlist: getActiveWatchlist(),
         strategyHealth: {
           dailyLossPct: simulator.state.dailyLossPct,
           drawdownPct: simulator.state.drawdownPct,
@@ -120,8 +156,67 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
       return;
     }
 
+    if (req.url === '/pending-decisions') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        pendingDecisions: getPendingDecisions(),
+        decisionHistory: getDecisionHistory().slice(0, 25)
+      }));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/decisions/approve') {
+      if (typeof simulator.approvePendingDecision !== 'function') {
+        res.writeHead(404, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Trade supervision unavailable' }));
+        return;
+      }
+      const body = await readJsonBody(req);
+      if (!body.id || typeof body.id !== 'string') {
+        res.writeHead(400, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Decision id is required' }));
+        return;
+      }
+      try {
+        const execution = await simulator.approvePendingDecision(body.id);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ approved: true, execution }));
+      } catch (error) {
+        res.writeHead(/not found|no longer has an open position/i.test(error.message) ? 404 : 400, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/decisions/reject') {
+      if (typeof simulator.rejectPendingDecision !== 'function') {
+        res.writeHead(404, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Trade supervision unavailable' }));
+        return;
+      }
+      const body = await readJsonBody(req);
+      if (!body.id || typeof body.id !== 'string') {
+        res.writeHead(400, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Decision id is required' }));
+        return;
+      }
+      try {
+        const rejected = simulator.rejectPendingDecision(body.id, body.reason);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ rejected: true, decision: rejected }));
+      } catch (error) {
+        res.writeHead(/not found/i.test(error.message) ? 404 : 400, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+      return;
+    }
+
     res.writeHead(404, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
+    })().catch((error) => {
+      res.writeHead(500, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: error.message }));
+    });
   });
 
   return server;

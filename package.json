@@ -14,11 +14,21 @@
     "type": "git",
     "url": "git+https://github.com/Darkhearted007/SniperBot.git"
   },
-  "keywords": ["sniper", "solana", "raydium", "pumpfun", "bsc", "paper-trading"],
+  "keywords": [
+    "sniper",
+    "solana",
+    "raydium",
+    "pumpfun",
+    "bsc",
+    "paper-trading"
+  ],
   "author": "",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/Darkhearted007/SniperBot/issues"
   },
-  "homepage": "https://github.com/Darkhearted007/SniperBot#readme"
+  "homepage": "https://github.com/Darkhearted007/SniperBot#readme",
+  "dependencies": {
+    "@solana/web3.js": "^2.0.0"
+  }
 }

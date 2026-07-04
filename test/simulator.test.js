@@ -102,3 +102,81 @@ test('dashboard auth accepts percent-encoded secret key containing non-ASCII cha
     delete require.cache[serverModPath];
   }
 });
+
+test('dashboard exposes supervised decision endpoints when available', async () => {
+  const previousSecret = process.env.DASHBOARD_SECRET_KEY;
+  process.env.DASHBOARD_SECRET_KEY = 'abc123';
+
+  try {
+    const serverModPath = require.resolve('../src/dashboard/server');
+    delete require.cache[serverModPath];
+    const { createDashboardServer } = require('../src/dashboard/server');
+    const simulator = {
+      state: {
+        bankrollSol: 1,
+        realizedPnlSol: 0,
+        openPositions: [],
+        dailyLossPct: 0,
+        drawdownPct: 0,
+        circuitBreaker: false
+      },
+      getPendingDecisions() {
+        return [{ id: 'decision-1', kind: 'enter' }];
+      },
+      getDecisionHistory() {
+        return [{ id: 'decision-0', status: 'rejected' }];
+      },
+      getActiveWatchlist() {
+        return [{ symbol: 'BONK', pair: 'SOL/BONK' }];
+      },
+      async approvePendingDecision(id) {
+        return { id, signature: 'sig-1' };
+      },
+      rejectPendingDecision(id, reason) {
+        return { id, reason: reason || 'manually-rejected' };
+      }
+    };
+    const server = createDashboardServer({
+      simulator,
+      logger: { all() { return []; } },
+      goalAgent: null,
+      variantAgent: null
+    });
+    await new Promise((resolve) => server.listen(0, resolve));
+    const port = server.address().port;
+
+    const pending = await fetch(`http://127.0.0.1:${port}/pending-decisions`, {
+      headers: { 'x-secret-key': 'abc123' }
+    });
+    assert.equal(pending.status, 200);
+    const pendingJson = await pending.json();
+    assert.equal(pendingJson.pendingDecisions.length, 1);
+
+    const approved = await fetch(`http://127.0.0.1:${port}/decisions/approve`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-secret-key': 'abc123'
+      },
+      body: JSON.stringify({ id: 'decision-1' })
+    });
+    assert.equal(approved.status, 200);
+
+    const rejected = await fetch(`http://127.0.0.1:${port}/decisions/reject`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-secret-key': 'abc123'
+      },
+      body: JSON.stringify({ id: 'decision-1', reason: 'operator-rejected' })
+    });
+    assert.equal(rejected.status, 200);
+
+    await new Promise((resolve) => server.close(resolve));
+  } finally {
+    if (previousSecret === undefined) delete process.env.DASHBOARD_SECRET_KEY;
+    else process.env.DASHBOARD_SECRET_KEY = previousSecret;
+    const serverModPath = require.resolve('../src/dashboard/server');
+    delete require.cache[serverModPath];
+  }
+});
