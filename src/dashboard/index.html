@@ -429,6 +429,13 @@
     inpUrl.value = serverUrl || 'http://localhost:3000';
     inpKey.value = secretKey;
     modalErr.classList.add('hidden');
+    // If the saved URL is a Railway project management URL, warn the user immediately.
+    if (/^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(serverUrl)) {
+      modalErr.textContent =
+        'The saved URL is a Railway project management URL, not your deployed service URL. ' +
+        'Enter the public domain assigned to your service, e.g. https://your-app.up.railway.app';
+      modalErr.classList.remove('hidden');
+    }
     modal.classList.remove('hidden');
     inpUrl.focus();
   }
@@ -562,6 +569,16 @@
   /* ── Refresh cycle ── */
   async function refresh() {
     if (!serverUrl) { setStatus('', 'Not configured'); return; }
+    // Guard: Railway project management URLs are the web console, not the deployed service.
+    if (/^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(serverUrl)) {
+      setStatus('error', 'Wrong URL');
+      setError(
+        'That looks like a Railway project management URL, not your deployed service URL. ' +
+        'Click ⚙ Settings and enter the public domain assigned to your service, ' +
+        'e.g. https://your-app.up.railway.app'
+      );
+      return;
+    }
     setStatus('', 'Fetching…');
     try {
       const data = await fetchSummary();

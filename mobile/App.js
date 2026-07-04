@@ -71,6 +71,14 @@ function SettingsScreen({ onConnect }) {
     const trimUrl = url.trim().replace(/\/$/, '');
     const trimKey = key.trim();
     if (!trimUrl) { setError('Server URL is required.'); return; }
+    // Guard: Railway project management URLs are the web console, not the deployed service.
+    if (/^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(trimUrl)) {
+      setError(
+        'That looks like a Railway project management URL, not your deployed service URL. ' +
+        'Enter the public domain assigned to your service, e.g. https://your-app.up.railway.app'
+      );
+      return;
+    }
     setError('');
     setLoading(true);
     try {
