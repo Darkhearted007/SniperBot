@@ -1,10 +1,51 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const { buildApp } = require('../src/index');
 
-function fixedChallengeSig(wallet, challenge, salt) {
-  const crypto = require('node:crypto');
-  return crypto.createHmac('sha256', salt).update(`${wallet}:${challenge}`).digest('hex');
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+function encodeBase58(bytes) {
+  if (!bytes.length) return '';
+  const digits = [0];
+  for (const byte of bytes) {
+    let carry = byte;
+    for (let i = 0; i < digits.length; i += 1) {
+      carry += digits[i] << 8;
+      digits[i] = carry % 58;
+      carry = Math.floor(carry / 58);
+    }
+    while (carry > 0) {
+      digits.push(carry % 58);
+      carry = Math.floor(carry / 58);
+    }
+  }
+  let result = '';
+  for (const byte of bytes) {
+    if (byte !== 0) break;
+    result += BASE58_ALPHABET[0];
+  }
+  for (let i = digits.length - 1; i >= 0; i -= 1) {
+    result += BASE58_ALPHABET[digits[i]];
+  }
+  return result;
+}
+
+function base64UrlToBuffer(value) {
+  const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+  return Buffer.from(padded, 'base64');
+}
+
+function createWalletIdentity() {
+  const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+  const jwk = publicKey.export({ format: 'jwk' });
+  const publicKeyBytes = base64UrlToBuffer(jwk.x);
+  return {
+    walletAddress: encodeBase58(publicKeyBytes),
+    signMessage(message) {
+      return crypto.sign(null, Buffer.from(message, 'utf8'), privateKey).toString('base64');
+    }
+  };
 }
 
 test('paper simulator enters safe opportunities and logs reasoning', () => {
@@ -28,13 +69,16 @@ test('paper simulator exits position on take-profit and learns from outcome', ()
   assert.ok(learning.stats.wins + learning.stats.losses >= 1, 'learning should update stats after exit');
 });
 
-test('dashboard auth supports secret key and wallet-style signature', async () => {
+test('dashboard auth supports secret key and real wallet sessions', async () => {
   const previousSecret = process.env.DASHBOARD_SECRET_KEY;
-  const previousSalt = process.env.WALLET_AUTH_SALT;
+  const previousAllowedWallets = process.env.DASHBOARD_ALLOWED_WALLETS;
   process.env.DASHBOARD_SECRET_KEY = 'abc123';
-  process.env.WALLET_AUTH_SALT = 'salt';
+  const walletIdentity = createWalletIdentity();
+  process.env.DASHBOARD_ALLOWED_WALLETS = walletIdentity.walletAddress;
 
   try {
+    const serverModPath = require.resolve('../src/dashboard/server');
+    delete require.cache[serverModPath];
     const { createDashboardServer } = require('../src/dashboard/server');
     const { simulator, logger } = buildApp();
     const server = createDashboardServer({ simulator, logger });
@@ -47,15 +91,26 @@ test('dashboard auth supports secret key and wallet-style signature', async () =
     const secretAuth = await fetch(`http://127.0.0.1:${port}/dashboard`, { headers: { 'x-secret-key': 'abc123' } });
     assert.equal(secretAuth.status, 200);
 
-    const wallet = 'wallet1';
-    const challenge = 'nonce';
-    const sig = fixedChallengeSig(wallet, challenge, 'salt');
+    const challengeRes = await fetch(
+      `http://127.0.0.1:${port}/auth/challenge?wallet=${encodeURIComponent(walletIdentity.walletAddress)}`
+    );
+    assert.equal(challengeRes.status, 200);
+    const challenge = await challengeRes.json();
+
+    const verifyRes = await fetch(`http://127.0.0.1:${port}/auth/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        challengeId: challenge.challengeId,
+        walletAddress: walletIdentity.walletAddress,
+        signature: walletIdentity.signMessage(challenge.message)
+      })
+    });
+    assert.equal(verifyRes.status, 200);
+    const walletSession = await verifyRes.json();
+
     const walletAuth = await fetch(`http://127.0.0.1:${port}/dashboard`, {
-      headers: {
-        'x-wallet-address': wallet,
-        'x-wallet-challenge': challenge,
-        'x-wallet-signature': sig
-      }
+      headers: { authorization: ['Bearer', walletSession.token].join(' ') }
     });
     assert.equal(walletAuth.status, 200);
 
@@ -64,8 +119,11 @@ test('dashboard auth supports secret key and wallet-style signature', async () =
     if (previousSecret === undefined) delete process.env.DASHBOARD_SECRET_KEY;
     else process.env.DASHBOARD_SECRET_KEY = previousSecret;
 
-    if (previousSalt === undefined) delete process.env.WALLET_AUTH_SALT;
-    else process.env.WALLET_AUTH_SALT = previousSalt;
+    if (previousAllowedWallets === undefined) delete process.env.DASHBOARD_ALLOWED_WALLETS;
+    else process.env.DASHBOARD_ALLOWED_WALLETS = previousAllowedWallets;
+
+    const serverModPath = require.resolve('../src/dashboard/server');
+    delete require.cache[serverModPath];
   }
 });
 

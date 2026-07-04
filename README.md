@@ -20,7 +20,7 @@ It also includes an **opt-in Solana live-trading mode** for a curated Solana uni
   - Solana live execution engine
   - Learning engine
   - Decision/execution logging
-  - Simple dashboard API with wallet or secret-key auth
+  - Simple dashboard API with real Solana wallet sessions or secret-key auth
 - Risk guardrails:
   - Position sizing cap
   - Drawdown and daily loss fail-safes
@@ -88,6 +88,7 @@ SOLANA_WATCHLIST_JSON='[
 LIVE_MIN_SOL_RESERVE=0.05 \
 LIVE_MAX_BANKROLL_SOL=0.25 \
 LIVE_SLIPPAGE_BPS=100 \
+DASHBOARD_ALLOWED_WALLETS=YourOperatorWalletBase58 \
 DASHBOARD_SECRET_KEY=mysecret \
 npm start
 ```
@@ -100,6 +101,9 @@ npm start
 - `LIVE_AUTO_WATCHLIST_SIZE` – top candidate count to keep in the active watchlist
 - `LIVE_REQUIRE_SUPERVISION` – require manual approval before live entries and exits are executed
 - `LIVE_SLIPPAGE_BPS` – default `100`
+- `DASHBOARD_ALLOWED_WALLETS` – comma-separated Solana wallet addresses allowed to sign in to the dashboard
+- `DASHBOARD_CHALLENGE_TTL_MS` – wallet sign-in challenge lifetime, default `300000`
+- `DASHBOARD_SESSION_TTL_MS` – wallet session lifetime, default `43200000`
 - `JUPITER_QUOTE_API_BASE`
 - `JUPITER_SWAP_API_BASE`
 
@@ -118,7 +122,8 @@ Open **`http://localhost:3000/`** in any browser after starting the bot.
 
 On first visit a connection dialog appears — enter:
 - **Server URL** – `http://localhost:3000` (or your machine's LAN IP for remote access)
-- **Secret Key** – the value of `DASHBOARD_SECRET_KEY`
+- **Secret Key** – optional fallback using `DASHBOARD_SECRET_KEY`
+- Or leave the key blank and approve the sign-in request from an allowed Solana wallet (for example Phantom)
 
 The dashboard auto-refreshes every 3 seconds and shows:
 - Goal progress bar (0.1 → 2.0 SOL)
@@ -218,9 +223,12 @@ Authentication (one of):
 1. Secret-key header:
    - Set `DASHBOARD_SECRET_KEY`
    - Send `x-secret-key: <key>`
-2. Wallet-style challenge signature headers:
-   - Set `WALLET_AUTH_SALT`
-   - Send `x-wallet-address`, `x-wallet-challenge`, `x-wallet-signature`
+2. Wallet challenge + session flow:
+   - Set `DASHBOARD_ALLOWED_WALLETS` to the operator wallets that may access the dashboard
+   - Request `GET /auth/challenge?wallet=<base58-wallet>`
+   - Sign the returned message with the wallet
+   - Exchange it at `POST /auth/verify` for a bearer token
+   - Send the bearer token in the `Authorization` header on subsequent dashboard API requests
 
 ## Test
 
