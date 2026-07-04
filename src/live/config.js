@@ -36,8 +36,14 @@ function normalizeWatchlistItem(item, index) {
     throw new Error(`SOLANA_WATCHLIST_JSON[${index}].symbol is required`);
   }
   const decimals = Number(item.decimals);
+  // Live-mode price sampling and quantity calculations intentionally keep a
+  // practical decimals cap because this bot converts sampled token amounts
+  // through JavaScript number arithmetic and one-token quote sizing.
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 18) {
-    throw new Error(`SOLANA_WATCHLIST_JSON[${index}].decimals must be an integer between 0 and 18`);
+    throw new Error(
+      `SOLANA_WATCHLIST_JSON[${index}].decimals must be an integer between 0 and 18 ` +
+      'for this live-mode implementation'
+    );
   }
 
   return {
@@ -53,7 +59,7 @@ function normalizeWatchlistItem(item, index) {
     baselineMomentumScore: Number.isFinite(Number(item.baselineMomentumScore))
       ? Number(item.baselineMomentumScore)
       : 0.65,
-    fixedVolatilityRisk: Number.isFinite(Number(item.volatilityRisk))
+    volatilityRisk: Number.isFinite(Number(item.volatilityRisk))
       ? Number(item.volatilityRisk)
       : null
   };

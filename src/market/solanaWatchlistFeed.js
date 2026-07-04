@@ -46,9 +46,13 @@ class SolanaWatchlistFeed {
     this.history.set(token.outputMint, { prices });
 
     const returns = prices.slice(1).map((value, index) => (value - prices[index]) / prices[index]);
+    // Scale small quote-to-quote moves into the 0-1 strategy scoring range so
+    // a ~10% move roughly contributes ±0.5 to the baseline momentum score.
     const momentumScore = clamp(token.baselineMomentumScore + changePct * 5, 0.05, 0.99);
-    const volatilityRisk = token.fixedVolatilityRisk != null
-      ? clamp(token.fixedVolatilityRisk, 0.01, 0.99)
+    const volatilityRisk = token.volatilityRisk != null
+      ? clamp(token.volatilityRisk, 0.01, 0.99)
+      // Expand recent return volatility into the same 0-1 risk range while
+      // keeping a floor for thin data and a cap below 1.0 for strategy math.
       : clamp(Math.max(0.08, stddev(returns) * 8), 0.08, 0.95);
 
     return {

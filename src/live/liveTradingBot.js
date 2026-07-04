@@ -30,6 +30,9 @@ class LiveTradingBot {
 
   async initialize() {
     this.state.bankrollSol = await this.executor.getInitialBankrollSol();
+    if (this.state.bankrollSol <= 0) {
+      throw new Error('Live trading requires a positive managed bankroll after reserve/cap settings');
+    }
     this.config = { ...this.config, startingBankrollSol: this.state.bankrollSol };
     this.strategy.config = this.config;
     this.state.highWatermark = Math.max(this.state.bankrollSol, Number.EPSILON);
@@ -88,7 +91,7 @@ class LiveTradingBot {
       : Math.max(cfg.startingBankrollSol, Number.EPSILON);
     this.state.highWatermark = Math.max(baselineWatermark, equity);
     this.state.drawdownPct = 1 - (equity / this.state.highWatermark);
-    this.state.dailyLossPct = Math.max(0, -this.state.realizedPnlTodaySol / Math.max(cfg.startingBankrollSol, Number.EPSILON));
+    this.state.dailyLossPct = Math.max(0, -this.state.realizedPnlTodaySol / cfg.startingBankrollSol);
     if (this.state.drawdownPct >= cfg.maxDrawdownPct || this.state.dailyLossPct >= cfg.maxDailyLossPct) {
       this.state.circuitBreaker = true;
     }

@@ -2,6 +2,8 @@ const { fetchJupiterQuote, fetchJupiterSwap } = require('../live/jupiterClient')
 const { LAMPORTS_PER_SOL } = require('../live/constants');
 
 function solToLamports(sol) {
+  // Lamports are integers, so any fractional lamport remainder is truncated;
+  // callers must still provide a large enough SOL amount to reach at least 1 lamport.
   return Math.floor(Number(sol) * LAMPORTS_PER_SOL);
 }
 

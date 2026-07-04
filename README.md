@@ -66,6 +66,7 @@ Live mode is disabled by default. Enable it with `TRADING_MODE=live`.
 - `SOLANA_RPC_URL` – Solana RPC HTTPS endpoint
 - `SOLANA_WALLET_SECRET` – wallet secret as a 64-byte JSON array or base64-encoded 64-byte keypair
 - `SOLANA_WATCHLIST_JSON` – JSON array of tokens to monitor
+- each watchlist item should use a practical token `decimals` value between `0` and `18`
 
 Example:
 

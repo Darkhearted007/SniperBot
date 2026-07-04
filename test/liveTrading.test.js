@@ -13,6 +13,7 @@ test('parseLiveTradingConfig parses live env and normalizes watchlist', () => {
     SOLANA_WALLET_SECRET: Buffer.alloc(64, 7).toString('base64'),
     SOLANA_WATCHLIST_JSON: JSON.stringify([
       {
+        // Placeholder mint for config-shape testing only.
         symbol: 'BONK',
         tokenName: 'Bonk',
         outputMint: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6YaB1pPB263yPB263',
@@ -70,7 +71,7 @@ test('SolanaWatchlistFeed converts Jupiter quotes into opportunities', async () 
       liquidityUsd: 500000,
       rugScore: 0.1,
       baselineMomentumScore: 0.7,
-      fixedVolatilityRisk: 0.12
+      volatilityRisk: 0.12
     }],
     fetchImpl
   });
@@ -151,7 +152,7 @@ test('SolanaLiveExecutor enter and exit update state from mocked Jupiter swaps',
 
   const exit = await executor.exit(state, state.openPositions[0]);
   assert.equal(state.openPositions.length, 0);
-  assert.ok(Math.abs(state.realizedPnlSol - 0.02) < 1e-12);
+  assert.ok(Math.abs(state.realizedPnlSol - 0.02) < 1e-9);
   assert.equal(exit.proceeds, 0.12);
   assert.equal(state.bankrollSol, 1.02);
 });

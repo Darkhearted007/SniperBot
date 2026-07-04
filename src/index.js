@@ -115,6 +115,7 @@ if (require.main === module) {
         }
         await sleep(liveConfig.pollIntervalMs);
       }
+      return;
     }
 
     const { orchestrator, goalAgent, variantAgent } = buildOrchestrator();

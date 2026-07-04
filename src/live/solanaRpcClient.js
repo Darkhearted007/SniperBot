@@ -2,8 +2,7 @@ const {
   createKeyPairSignerFromBytes,
   getBase64EncodedWireTransaction,
   getSignatureFromTransaction,
-  getTransactionDecoder,
-  signTransaction
+  getTransactionDecoder
 } = require('@solana/web3.js');
 const { LAMPORTS_PER_SOL } = require('./constants');
 
@@ -90,11 +89,11 @@ class SolanaRpcClient {
     return Number(result.value) / LAMPORTS_PER_SOL;
   }
 
-  async signAndSendTransaction(base64Transaction, { timeoutMs = 60_000, pollIntervalMs = 1_500 } = {}) {
+  async signAndSendTransaction(base64UnsignedTransaction, { timeoutMs = 60_000, pollIntervalMs = 1_500 } = {}) {
     await this.init();
-    const transactionBytes = Buffer.from(base64Transaction, 'base64');
+    const transactionBytes = Buffer.from(base64UnsignedTransaction, 'base64');
     const decodedTransaction = this.transactionDecoder.decode(transactionBytes);
-    const signedTransaction = await signTransaction([this.signer.keyPair.privateKey], decodedTransaction);
+    const [signedTransaction] = await this.signer.signTransactions([decodedTransaction]);
     const encodedWireTransaction = getBase64EncodedWireTransaction(signedTransaction);
     const signature = getSignatureFromTransaction(signedTransaction);
 
