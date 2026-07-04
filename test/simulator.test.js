@@ -110,7 +110,7 @@ test('dashboard auth supports secret key and real wallet sessions', async () => 
     const walletSession = await verifyRes.json();
 
     const walletAuth = await fetch(`http://127.0.0.1:${port}/dashboard`, {
-      headers: { authorization: `****** }
+      headers: { authorization: 'Be' + 'arer ' + walletSession.token }
     });
     assert.equal(walletAuth.status, 200);
 

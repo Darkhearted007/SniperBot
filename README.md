@@ -228,7 +228,7 @@ Authentication (one of):
    - Request `GET /auth/challenge?wallet=<base58-wallet>`
    - Sign the returned message with the wallet
    - Exchange it at `POST /auth/verify` for a bearer token
-   - Send `Authorization: ****** on subsequent dashboard API requests
+   - Send the bearer token in the `Authorization` header on subsequent dashboard API requests
 
 ## Test
 
