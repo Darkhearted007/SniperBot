@@ -253,8 +253,9 @@
       <p class="hint" aria-label="Example URLs: http://192.168.1.x:3000 locally, or https://your-app.up.railway.app on Railway">e.g. <code>http://192.168.1.x:3000</code> locally, or <code>https://your-app.up.railway.app</code> on Railway</p>
     </div>
     <div class="field">
-      <label>Secret Key</label>
+      <label>Secret Key (optional fallback)</label>
       <input id="inp-key" type="password" placeholder="value of DASHBOARD_SECRET_KEY" autocomplete="off" spellcheck="false">
+      <p class="hint">Leave blank to sign in with a connected Solana wallet such as Phantom</p>
       <p class="hint">Set with <code>DASHBOARD_SECRET_KEY=…</code> when starting the bot</p>
     </div>
     <div id="modal-error" class="banner error hidden" style="margin-bottom:12px"></div>
@@ -365,6 +366,7 @@
 <script>
   /* ── Storage keys ── */
   const KEY_URL = 'sb_server_url';
+  const KEY_SESSION = 'sb_wallet_session';
   // NOTE: The secret key is intentionally not persisted to disk/storage
   // to avoid clear-text storage of credentials. Only the server URL is
   // saved; the key is kept in memory and re-entered each browser session.
@@ -372,6 +374,7 @@
   /* ── State ── */
   let serverUrl = '';
   let secretKey = '';
+  let sessionToken = '';
   let refreshTimer = null;
   let lastFetchAt = null;
 
@@ -418,12 +421,17 @@
   function loadSettings() {
     serverUrl = localStorage.getItem(KEY_URL) || '';
     secretKey = ''; // never loaded from storage; user re-enters each session
+    sessionToken = sessionStorage.getItem(KEY_SESSION) || '';
   }
   function saveSettings() {
     serverUrl = inpUrl.value.trim().replace(/\/$/, '');
     secretKey = inpKey.value.trim();
     localStorage.setItem(KEY_URL, serverUrl);
     // secretKey is intentionally NOT saved to storage
+    if (secretKey) {
+      sessionToken = '';
+      sessionStorage.removeItem(KEY_SESSION);
+    }
   }
   function openModal() {
     inpUrl.value = serverUrl || window.location.origin;
@@ -440,11 +448,64 @@
     inpUrl.focus();
   }
   function closeModal() { modal.classList.add('hidden'); }
+  function getWalletProvider() {
+    return window.phantom?.solana || window.solana || null;
+  }
+  function bytesToBase64(bytes) {
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
+    }
+    return btoa(binary);
+  }
+  async function connectWalletSession() {
+    const provider = getWalletProvider();
+    if (!provider) {
+      throw new Error('No Solana wallet found. Install Phantom or enter a secret key.');
+    }
+    if (typeof provider.connect !== 'function' || typeof provider.signMessage !== 'function') {
+      throw new Error('The connected wallet does not support message signing.');
+    }
+
+    const connected = await provider.connect();
+    const walletAddress = connected?.publicKey?.toString?.() || provider.publicKey?.toString?.();
+    if (!walletAddress) {
+      throw new Error('Wallet connection failed.');
+    }
+
+    const challengeRes = await fetch(serverUrl + '/auth/challenge?wallet=' + encodeURIComponent(walletAddress));
+    const challengeBody = await challengeRes.json().catch(() => ({}));
+    if (!challengeRes.ok) {
+      throw new Error(challengeBody.error || 'Failed to create wallet challenge');
+    }
+
+    const messageBytes = new TextEncoder().encode(challengeBody.message);
+    const signed = await provider.signMessage(messageBytes, 'utf8');
+    const signatureBytes = signed?.signature || signed;
+    const verifyRes = await fetch(serverUrl + '/auth/verify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        challengeId: challengeBody.challengeId,
+        walletAddress,
+        signature: bytesToBase64(signatureBytes)
+      })
+    });
+    const verifyBody = await verifyRes.json().catch(() => ({}));
+    if (!verifyRes.ok || !verifyBody.token) {
+      throw new Error(verifyBody.error || 'Wallet verification failed');
+    }
+
+    sessionToken = verifyBody.token;
+    sessionStorage.setItem(KEY_SESSION, sessionToken);
+  }
 
   /* ── Fetch ── */
   async function fetchSummary() {
     const headers = {};
     if (secretKey) headers['x-secret-key'] = encodeURIComponent(secretKey);
+    else if (sessionToken) headers.authorization = 'Bearer ' + sessionToken;
     const res = await fetch(serverUrl + '/summary', { headers });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
@@ -588,6 +649,11 @@
       setError(null);
       lastUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
     } catch (e) {
+      if (/Unauthorized/i.test(e.message)) {
+        sessionToken = '';
+        sessionStorage.removeItem(KEY_SESSION);
+        clearInterval(refreshTimer);
+      }
       setStatus('error', 'Error');
       setError('Could not reach ' + serverUrl + ' — ' + e.message);
     }
@@ -621,6 +687,9 @@
     btnSave.textContent = 'Testing…';
     btnSave.disabled = true;
     try {
+      if (!secretKey) {
+        await connectWalletSession();
+      }
       await fetchSummary();
       closeModal();
       startAutoRefresh();
@@ -635,9 +704,8 @@
 
   /* ── Boot ── */
   loadSettings();
-  // secretKey is never persisted, so always show the modal to enter it.
-  // The URL pre-fills from localStorage if previously saved.
-  openModal();
+  if (serverUrl && sessionToken) startAutoRefresh();
+  else openModal();
 </script>
 </body>
 </html>
