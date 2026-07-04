@@ -285,7 +285,7 @@
   <!-- Goal Progress -->
   <div class="card goal-card" id="goal-card">
     <div class="card-label">Goal Progress · 0.1 → 2.0 SOL in 24 h</div>
-    <div id="goal-badge" class="hidden"></div>
+    <div id="goal-status-badge" class="hidden"></div>
     <div class="progress-track"><div id="goal-fill" class="progress-fill"></div></div>
     <div class="goal-stats">
       <span id="goal-equity">— SOL</span>
@@ -365,7 +365,9 @@
 <script>
   /* ── Storage keys ── */
   const KEY_URL = 'sb_server_url';
-  const KEY_SECRET = 'sb_secret_key';
+  // NOTE: The secret key is intentionally not persisted to disk/storage
+  // to avoid clear-text storage of credentials. Only the server URL is
+  // saved; the key is kept in memory and re-entered each browser session.
 
   /* ── State ── */
   let serverUrl = '';
@@ -415,13 +417,13 @@
   /* ── Settings ── */
   function loadSettings() {
     serverUrl = localStorage.getItem(KEY_URL) || '';
-    secretKey = localStorage.getItem(KEY_SECRET) || '';
+    secretKey = ''; // never loaded from storage; user re-enters each session
   }
   function saveSettings() {
     serverUrl = inpUrl.value.trim().replace(/\/$/, '');
     secretKey = inpKey.value.trim();
     localStorage.setItem(KEY_URL, serverUrl);
-    localStorage.setItem(KEY_SECRET, secretKey);
+    // secretKey is intentionally NOT saved to storage
   }
   function openModal() {
     inpUrl.value = serverUrl || 'http://localhost:3000';
@@ -456,11 +458,11 @@
       $('goal-time').textContent   = gs.stop
         ? (gs.achieved ? '🏁 Goal achieved!' : '⏰ Time expired')
         : fmtMs(gs.timeRemainingMs) + ' remaining';
-      const badge = $('goal-badge');
+      const badge = $('goal-status-badge');
       badge.classList.remove('hidden', 'achieved', 'expired', 'running');
-      if (gs.achieved)      { badge.className = 'achieved'; badge.textContent = '✓ ACHIEVED'; }
-      else if (gs.expired)  { badge.className = 'expired';  badge.textContent = '✗ EXPIRED'; }
-      else                  { badge.className = 'running';  badge.textContent = '▶ RUNNING'; }
+      if (gs.achieved)      { badge.classList.add('achieved'); badge.textContent = '✓ ACHIEVED'; }
+      else if (gs.expired)  { badge.classList.add('expired');  badge.textContent = '✗ EXPIRED'; }
+      else                  { badge.classList.add('running');  badge.textContent = '▶ RUNNING'; }
     }
 
     /* Metrics */
@@ -607,11 +609,9 @@
 
   /* ── Boot ── */
   loadSettings();
-  if (serverUrl) {
-    startAutoRefresh();
-  } else {
-    openModal();
-  }
+  // secretKey is never persisted, so always show the modal to enter it.
+  // The URL pre-fills from localStorage if previously saved.
+  openModal();
 </script>
 </body>
 </html>

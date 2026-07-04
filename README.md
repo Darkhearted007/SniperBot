@@ -91,15 +91,18 @@ http://192.168.1.42:3000
 
 ### Publish a shareable Expo Go link
 
-To get a permanent link your testers can open without cloning the repo:
+To get a permanent link your testers can open without cloning the repo, use [EAS Update](https://docs.expo.dev/eas-update/getting-started/):
 
 ```bash
 cd mobile
-npx expo login          # one-time Expo account login
-npx expo publish        # publishes to exp.host
+npm install -g eas-cli     # install the EAS CLI once
+npx eas login              # log in to your Expo account
+npx eas update --branch production --message "initial release"
 ```
 
-After publishing, Expo prints a URL like `exp://exp.host/@your-username/sniperbot-dashboard` — share that with testers.
+After publishing, EAS prints a shareable URL that testers can open directly in Expo Go.
+
+Alternatively, for quick local sharing during development, run `npx expo start` and share the printed QR code or the `exp://` URL with testers on the same network.
 
 ## API endpoints
 
