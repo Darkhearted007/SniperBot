@@ -27,7 +27,7 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
     const secretHeader = req.headers['x-secret-key'];
     let decodedHeader;
     try { decodedHeader = secretHeader ? decodeURIComponent(secretHeader) : secretHeader; }
-    catch (_) { decodedHeader = secretHeader; }
+    catch (_) { decodedHeader = secretHeader; } // malformed percent-encoding: compare as-is (will fail auth)
     if (secret && decodedHeader && safeEqual(decodedHeader, secret)) return true;
 
     const wallet = req.headers['x-wallet-address'];
