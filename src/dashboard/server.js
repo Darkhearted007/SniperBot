@@ -25,7 +25,10 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
 
   function auth(req) {
     const secretHeader = req.headers['x-secret-key'];
-    if (secret && secretHeader && safeEqual(secretHeader, secret)) return true;
+    let decodedHeader;
+    try { decodedHeader = secretHeader ? decodeURIComponent(secretHeader) : secretHeader; }
+    catch (_) { decodedHeader = secretHeader; }
+    if (secret && decodedHeader && safeEqual(decodedHeader, secret)) return true;
 
     const wallet = req.headers['x-wallet-address'];
     const challenge = req.headers['x-wallet-challenge'];
