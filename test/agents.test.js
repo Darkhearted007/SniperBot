@@ -156,7 +156,7 @@ test('StrategyVariantAgent: getBestVariantConfig returns balanced config before 
   assert.equal(best.name, 'balanced');
 });
 
-test('StrategyVariantAgent: summary sorted best equity first', () => {
+test('StrategyVariantAgent: summary sorted best risk-adjusted score first', () => {
   const feed = createOpportunityFeed();
   const agent = new StrategyVariantAgent({ feed });
   // Run enough cycles to generate differing equity
@@ -165,7 +165,10 @@ test('StrategyVariantAgent: summary sorted best equity first', () => {
   }
   const summary = agent.getSummary();
   for (let i = 0; i < summary.length - 1; i++) {
-    assert.ok(summary[i].equity >= summary[i + 1].equity, 'summary should be sorted best first');
+    assert.ok(
+      summary[i].riskAdjustedScore >= summary[i + 1].riskAdjustedScore,
+      'summary should be sorted best first'
+    );
   }
 });
 

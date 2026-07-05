@@ -58,6 +58,7 @@ function normalizeWatchlistItem(item, index) {
   return {
     symbol: item.symbol,
     tokenName: item.tokenName || item.symbol,
+    tokenCategory: item.tokenCategory || 'uncategorized',
     pair: item.pair || `SOL/${item.symbol}`,
     venue: item.venue || 'solana/jupiter',
     inputMint: item.inputMint || NATIVE_SOL_MINT,

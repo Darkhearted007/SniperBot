@@ -7,7 +7,8 @@ function clamp(value, min, max) {
 
 function scoreOpportunity(opportunity) {
   const liquidityBonus = clamp(Math.log10(Math.max(opportunity.liquidityUsd || 1, 1)) / 10, 0, 1) * 0.15;
-  return opportunity.momentumScore - opportunity.volatilityRisk - opportunity.rugScore + liquidityBonus;
+  const executionPenalty = (opportunity.expectedSlippageBps || 0) / 1000 + (opportunity.executionFailureRate || 0);
+  return opportunity.momentumScore - opportunity.volatilityRisk - opportunity.rugScore - executionPenalty + liquidityBonus;
 }
 
 function stddev(values) {
@@ -65,6 +66,18 @@ class SolanaWatchlistFeed {
       // keeping a floor for thin data and a cap below 1.0 for strategy math.
       : clamp(Math.max(0.08, stddev(returns) * 8), 0.08, 0.95);
 
+    const expectedSlippageBps = Math.round(clamp(
+      this.slippageBps * (1 + volatilityRisk * 0.8 + (token.liquidityUsd < 100000 ? 0.5 : 0)),
+      10,
+      350
+    ));
+    const depthScore = clamp(Math.log10(Math.max(token.liquidityUsd || 1, 1)) / 6, 0.1, 1);
+    const executionFailureRate = clamp(
+      (volatilityRisk * 0.08) + (expectedSlippageBps / 1000),
+      0.005,
+      0.5
+    );
+
     return {
       pair: token.pair,
       tokenName: token.tokenName,
@@ -72,12 +85,21 @@ class SolanaWatchlistFeed {
       venue: token.venue,
       liquidityUsd: token.liquidityUsd,
       rugScore: token.rugScore,
+      tokenCategory: token.tokenCategory || 'uncategorized',
       momentumScore,
       volatilityRisk,
+      expectedSlippageBps,
+      depthScore,
+      executionFailureRate,
       price: priceSol,
       inputMint: token.inputMint,
       outputMint: token.outputMint,
       decimals: token.decimals,
+      marketContext: {
+        trendState: momentumScore > 0.72 ? 'bull' : momentumScore < 0.45 ? 'bear' : 'chop',
+        volatilityRegime: volatilityRisk > 0.55 ? 'high' : volatilityRisk > 0.3 ? 'mid' : 'low',
+        regimeStrength: clamp(Math.abs(momentumScore - 0.5) * 2, 0.1, 1)
+      },
       quote
     };
   }

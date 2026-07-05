@@ -62,8 +62,12 @@ test('paper simulator enters safe opportunities and logs reasoning', () => {
 test('paper simulator exits position on take-profit and learns from outcome', () => {
   const { simulator, learning } = buildApp();
   simulator.runCycle();
+  assert.ok(simulator.state.openPositions.length > 0, 'expected at least one open position after cycle');
   const before = simulator.state.realizedPnlSol;
-  simulator.processMarketTick({ 'SOL/NEW1': 0.022, 'BNB/NEW3': 0.03 });
+  const forcedTakeProfitMap = Object.fromEntries(
+    simulator.state.openPositions.map((position) => [position.pair, position.entryPrice * (1 + position.tpPct + 0.1)])
+  );
+  simulator.processMarketTick(forcedTakeProfitMap);
 
   assert.notEqual(simulator.state.realizedPnlSol, before, 'realized pnl should change after forced exits');
   assert.ok(learning.stats.wins + learning.stats.losses >= 1, 'learning should update stats after exit');

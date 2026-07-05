@@ -16,6 +16,18 @@ class TradeLogger {
   all() {
     return this.records;
   }
+
+  snapshot(maxRecords = null) {
+    if (!Number.isFinite(maxRecords) || maxRecords < 1) {
+      return [...this.records];
+    }
+    return this.records.slice(-Math.floor(maxRecords));
+  }
+
+  restore(records = []) {
+    if (!Array.isArray(records)) return;
+    this.records = [...records];
+  }
 }
 
 module.exports = { TradeLogger };

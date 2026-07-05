@@ -15,12 +15,15 @@ class PatternAgent {
     const venueMap = {};
     const liqBuckets = { low: { wins: 0, total: 0 }, mid: { wins: 0, total: 0 }, high: { wins: 0, total: 0 } };
     const momentumBuckets = { low: { wins: 0, total: 0 }, mid: { wins: 0, total: 0 }, high: { wins: 0, total: 0 } };
+    const regimeBuckets = { bull: { wins: 0, total: 0 }, chop: { wins: 0, total: 0 }, bear: { wins: 0, total: 0 } };
 
     for (const r of exits) {
       const venue = r.position?.venue || 'unknown';
       const liq = r.position?.liquidityUsd || 0;
       const momentum = r.position?.momentumScore || 0;
       const isWin = r.execution?.pnlPct > 0;
+      // Keep backward compatibility for older logs that stored trendState at the top level.
+      const trendState = r.position?.marketContext?.trendState || r.position?.trendState || null;
 
       // venue stats
       if (!venueMap[venue]) venueMap[venue] = { wins: 0, total: 0, avgPnlPct: 0 };
@@ -39,6 +42,11 @@ class PatternAgent {
       const momKey = momentum < 0.5 ? 'low' : momentum < 0.75 ? 'mid' : 'high';
       momentumBuckets[momKey].total += 1;
       if (isWin) momentumBuckets[momKey].wins += 1;
+
+      if (trendState && regimeBuckets[trendState]) {
+        regimeBuckets[trendState].total += 1;
+        if (isWin) regimeBuckets[trendState].wins += 1;
+      }
     }
 
     const winRate = (bucket) =>
@@ -47,6 +55,7 @@ class PatternAgent {
     const bestVenue = this._bestKey(venueMap, (v) => (v.total >= 3 ? winRate(v) : -1));
     const bestLiqBucket = this._bestKey(liqBuckets, winRate);
     const bestMomBucket = this._bestKey(momentumBuckets, winRate);
+    const bestTrendRegime = this._bestKey(regimeBuckets, (bucket) => (bucket.total > 0 ? winRate(bucket) : -1));
 
     // Recommended minimum momentum score based on the best performing bucket
     const recommendedMinMomentum =
@@ -55,6 +64,13 @@ class PatternAgent {
     // Recommended minimum liquidity based on the best performing bucket
     const recommendedMinLiquidity =
       bestLiqBucket === 'high' ? 100000 : bestLiqBucket === 'mid' ? 30000 : 10000;
+    const recommendedRiskMode = bestTrendRegime === 'bull'
+      ? 'growth'
+      : bestTrendRegime === 'chop'
+        ? 'balanced'
+        : bestTrendRegime === 'bear'
+          ? 'defensive'
+          : 'balanced';
 
     return {
       totalExits: exits.length,
@@ -62,11 +78,14 @@ class PatternAgent {
       venueStats: venueMap,
       liqBucketStats: liqBuckets,
       momentumBucketStats: momentumBuckets,
+      regimeStats: regimeBuckets,
       bestVenue,
       bestLiqBucket,
       bestMomBucket,
+      bestTrendRegime,
       recommendedMinMomentum,
-      recommendedMinLiquidity
+      recommendedMinLiquidity,
+      recommendedRiskMode
     };
   }
 

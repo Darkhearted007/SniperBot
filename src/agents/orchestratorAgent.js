@@ -9,6 +9,16 @@ const { PaperTradingSimulator } = require('../simulator/paperTradingSimulator');
 const { equityOf } = require('../simulator/multiStrategySimulator');
 const { RISK_CONFIG } = require('../config/risk');
 
+// Adaptive tuning constants intentionally conservative to avoid unstable threshold jumps per cycle.
+const MOMENTUM_FLOOR_MULTIPLIER = 0.8;
+const GROWTH_POSITION_SCALE = 1.25;
+const GROWTH_POSITION_CAP = 0.3;
+const GROWTH_EDGE_FLOOR = 0.12;
+const GROWTH_EDGE_MULTIPLIER = 0.85;
+const DEFENSIVE_POSITION_FLOOR = 0.05;
+const DEFENSIVE_POSITION_MULTIPLIER = 0.7;
+const DEFENSIVE_EDGE_MULTIPLIER = 1.2;
+
 /**
  * OrchestratorAgent coordinates all sub-agents to pursue the hardcoded goal of
  * growing 0.1 SOL → 2 SOL within 24 hours.
@@ -51,6 +61,7 @@ class OrchestratorAgent {
 
     this.variantAgent = variantAgent || new StrategyVariantAgent({ feed });
     this.stopOnGoal = stopOnGoal;
+    this.currentRegime = 'chop';
 
     // Main simulator — strategy config is hot-swapped after each variant cycle
     this._mainLearning = new LearningEngine(config);
@@ -68,10 +79,12 @@ class OrchestratorAgent {
 
     // Tracks the active variant name driving the main sim
     this.activeVariantName = 'balanced';
+    this.adaptiveConfig = { ...config };
 
     // Price state for synthetic ticks
     this._prices = {};
-    for (const opp of feed.list()) {
+    this._latestOpportunities = feed.list();
+    for (const opp of this._latestOpportunities) {
       this._prices[opp.pair] = opp.price;
     }
   }
@@ -81,11 +94,12 @@ class OrchestratorAgent {
    * Callers can also supply an explicit priceMap (e.g. from a real feed).
    */
   tickPrices(externalPriceMap = null) {
+    this._latestOpportunities = this.feed.list();
     if (externalPriceMap) {
       this._prices = { ...this._prices, ...externalPriceMap };
       return { ...this._prices };
     }
-    const opps = this.feed.list();
+    const opps = this._latestOpportunities;
     for (const opp of opps) {
       const momentum = opp.momentumScore - 0.5; // bias: positive momentum → upward drift
       const volatility = opp.volatilityRisk;
@@ -107,6 +121,7 @@ class OrchestratorAgent {
   runCycle(externalPriceMap = null) {
     this.cycleCount += 1;
     const priceMap = this.tickPrices(externalPriceMap);
+    this.currentRegime = this._detectRegime(this._latestOpportunities);
 
     // 1. Goal check — hard stop
     const goalStatus = this.goalAgent.checkGoal(this.mainSimulator.state);
@@ -127,15 +142,16 @@ class OrchestratorAgent {
     const allVariantLogs = this.variantAgent.instances
       .flatMap((inst) => inst.logger.all());
     const patterns = this.patternAgent.analyze(allVariantLogs);
+    this._applyPatternFeedback(patterns);
 
     // 4. Hot-swap main strategy to best-performing variant config
     const bestConfig = this.variantAgent.getBestVariantConfig();
     if (bestConfig.name !== this.activeVariantName) {
       this.activeVariantName = bestConfig.name || this.activeVariantName;
-      // Replace the strategy config in-place (learning history is intentionally preserved)
-      this._mainStrategy.config = bestConfig;
-      this.mainSimulator.config = bestConfig;
+      // Keep adaptive overrides dominant so pattern/regime feedback remains sticky between variant swaps.
+      this.adaptiveConfig = { ...bestConfig, ...this.adaptiveConfig };
     }
+    this._syncAdaptiveConfig();
 
     // 5. Advance main simulator
     this.mainSimulator.runCycle();
@@ -155,6 +171,7 @@ class OrchestratorAgent {
       activeVariant: this.activeVariantName,
       variantSummary,
       patterns,
+      regime: this.currentRegime,
       mainState: {
         bankrollSol: this.mainSimulator.state.bankrollSol,
         realizedPnlSol: this.mainSimulator.state.realizedPnlSol,
@@ -169,6 +186,94 @@ class OrchestratorAgent {
 
   get logger() {
     return this._mainLogger;
+  }
+
+  snapshot() {
+    return {
+      cycleCount: this.cycleCount,
+      activeVariantName: this.activeVariantName,
+      currentRegime: this.currentRegime,
+      adaptiveConfig: this.adaptiveConfig,
+      mainLearning: typeof this._mainLearning.snapshot === 'function' ? this._mainLearning.snapshot() : null,
+      mainLog: typeof this._mainLogger.snapshot === 'function' ? this._mainLogger.snapshot(1000) : [],
+      mainState: this.mainSimulator.state,
+      variants: typeof this.variantAgent.snapshot === 'function' ? this.variantAgent.snapshot() : null
+    };
+  }
+
+  restore(snapshot = {}) {
+    if (!snapshot || typeof snapshot !== 'object') return;
+    this.cycleCount = Number(snapshot.cycleCount) || 0;
+    this.activeVariantName = snapshot.activeVariantName || this.activeVariantName;
+    this.currentRegime = snapshot.currentRegime || this.currentRegime;
+    if (snapshot.adaptiveConfig && typeof snapshot.adaptiveConfig === 'object') {
+      this.adaptiveConfig = { ...this.config, ...snapshot.adaptiveConfig };
+      this._syncAdaptiveConfig();
+    }
+    if (snapshot.mainLearning && typeof this._mainLearning.restore === 'function') {
+      this._mainLearning.restore(snapshot.mainLearning);
+    }
+    if (Array.isArray(snapshot.mainLog) && typeof this._mainLogger.restore === 'function') {
+      this._mainLogger.restore(snapshot.mainLog);
+    }
+    if (snapshot.mainState && typeof snapshot.mainState === 'object') {
+      this.mainSimulator.state = {
+        ...this.mainSimulator.state,
+        ...snapshot.mainState
+      };
+    }
+    if (snapshot.variants && typeof this.variantAgent.restore === 'function') {
+      this.variantAgent.restore(snapshot.variants);
+    }
+  }
+
+  _syncAdaptiveConfig() {
+    this._mainStrategy.config = this.adaptiveConfig;
+    this.mainSimulator.config = this.adaptiveConfig;
+  }
+
+  _applyPatternFeedback(patterns) {
+    const nextConfig = { ...this.adaptiveConfig };
+    const baseMinMomentum = this.config.minMomentumScore ?? RISK_CONFIG.minMomentumScore;
+    const baseMaxPosition = this.config.maxPositionPct ?? RISK_CONFIG.maxPositionPct;
+    const baseExpectedEdge = this.config.minExpectedEdge ?? RISK_CONFIG.minExpectedEdge;
+    if (Number.isFinite(patterns.recommendedMinMomentum)) {
+      nextConfig.minMomentumScore = Math.max(
+        baseMinMomentum * MOMENTUM_FLOOR_MULTIPLIER,
+        patterns.recommendedMinMomentum
+      );
+    }
+    if (Number.isFinite(patterns.recommendedMinLiquidity)) {
+      nextConfig.minLiquidityUsd = Math.max(10000, patterns.recommendedMinLiquidity);
+    }
+
+    if (patterns.recommendedRiskMode === 'growth') {
+      nextConfig.maxPositionPct = Math.min(baseMaxPosition * GROWTH_POSITION_SCALE, GROWTH_POSITION_CAP);
+      nextConfig.minExpectedEdge = Math.max(GROWTH_EDGE_FLOOR, baseExpectedEdge * GROWTH_EDGE_MULTIPLIER);
+    } else if (patterns.recommendedRiskMode === 'defensive') {
+      nextConfig.maxPositionPct = Math.max(
+        DEFENSIVE_POSITION_FLOOR,
+        baseMaxPosition * DEFENSIVE_POSITION_MULTIPLIER
+      );
+      nextConfig.minExpectedEdge = baseExpectedEdge * DEFENSIVE_EDGE_MULTIPLIER;
+    } else {
+      nextConfig.maxPositionPct = baseMaxPosition;
+      nextConfig.minExpectedEdge = baseExpectedEdge;
+    }
+    this.adaptiveConfig = nextConfig;
+  }
+
+  _detectRegime(opportunities = []) {
+    if (!Array.isArray(opportunities) || opportunities.length === 0) return 'chop';
+    const totals = opportunities.reduce((acc, item) => ({
+      momentum: acc.momentum + (item.momentumScore || 0),
+      volatility: acc.volatility + (item.volatilityRisk || 0)
+    }), { momentum: 0, volatility: 0 });
+    const avgMomentum = totals.momentum / opportunities.length;
+    const avgVolatility = totals.volatility / opportunities.length;
+    if (avgMomentum > 0.72 && avgVolatility < 0.4) return 'bull';
+    if (avgMomentum < 0.45 || avgVolatility > 0.62) return 'bear';
+    return 'chop';
   }
 }
 

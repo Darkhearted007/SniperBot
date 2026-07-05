@@ -15,6 +15,7 @@ const { LiveTradingBot } = require('./live/liveTradingBot');
 const { SolanaRpcClient } = require('./live/solanaRpcClient');
 const { TradeApprovalQueue } = require('./live/tradeApprovalQueue');
 const { getTradingMode, parseLiveTradingConfig } = require('./live/config');
+const { loadState, saveState } = require('./learning/stateStore');
 
 function buildApp() {
   const learning = new LearningEngine();
@@ -27,7 +28,7 @@ function buildApp() {
   return { simulator, logger, learning };
 }
 
-function buildOrchestrator({ stopOnGoal = true } = {}) {
+function buildOrchestrator({ stopOnGoal = true, persistedState = null } = {}) {
   const feed = createOpportunityFeed();
   const goalAgent = new GoalAgent();
   const patternAgent = new PatternAgent();
@@ -39,10 +40,13 @@ function buildOrchestrator({ stopOnGoal = true } = {}) {
     variantAgent,
     stopOnGoal
   });
+  if (persistedState?.orchestrator) {
+    orchestrator.restore(persistedState.orchestrator);
+  }
   return { orchestrator, goalAgent, variantAgent, patternAgent };
 }
 
-async function buildLiveApp(env = process.env) {
+async function buildLiveApp(env = process.env, persistedState = null) {
   const liveConfig = parseLiveTradingConfig(env);
   if (liveConfig.mode !== 'live') {
     throw new Error('buildLiveApp requires TRADING_MODE=live');
@@ -83,6 +87,9 @@ async function buildLiveApp(env = process.env) {
     approvalQueue
   });
   await bot.initialize();
+  if (persistedState?.live) {
+    bot.restore(persistedState.live);
+  }
 
   return { bot, logger, learning, goalAgent, liveConfig, client };
 }
@@ -128,16 +135,23 @@ const MAX_LIVE_BACKOFF_MS = 60 * 1000;
 const MAX_PAPER_BACKOFF_MS = 5 * 1000;
 const DEFAULT_PAPER_BASE_DELAY_MS = 50;
 const PAPER_PROGRESS_LOG_INTERVAL = 50;
+const DEFAULT_STATE_PERSIST_EVERY = 10;
 
 async function runMain(env = process.env, runtime = process) {
   const mode = getTradingMode(env);
   const port = Number(env.PORT || 3000);
+  const statePersistEvery = Math.max(1, Number(env.BOT_STATE_PERSIST_EVERY_CYCLES || DEFAULT_STATE_PERSIST_EVERY));
   const shutdown = {
     requested: false,
     reason: null
   };
   let server = null;
   let shuttingDown = false;
+  let persistedState = null;
+  let persistDebounceCounter = 0;
+  let activeOrchestrator = null;
+  let activeLiveBot = null;
+  persistedState = await loadState(env.BOT_STATE_FILE);
 
   const requestShutdown = (reason) => {
     if (shutdown.requested) return;
@@ -166,7 +180,8 @@ async function runMain(env = process.env, runtime = process) {
 
   try {
     if (mode === 'live') {
-      const { bot, logger, goalAgent, liveConfig, client } = await buildLiveApp(env);
+      const { bot, logger, goalAgent, liveConfig, client } = await buildLiveApp(env, persistedState);
+      activeLiveBot = bot;
       server = createDashboardServer({
         simulator: bot,
         logger,
@@ -184,6 +199,10 @@ async function runMain(env = process.env, runtime = process) {
         try {
           const result = await bot.runCycle();
           consecutiveCycleFailures = 0;
+          persistDebounceCounter += 1;
+          if (persistDebounceCounter % statePersistEvery === 0) {
+            await saveState(env.BOT_STATE_FILE, { live: bot.snapshot() });
+          }
           logEvent('info', 'live-cycle-complete', {
             bankrollSol: Number(result.bankrollSol.toFixed(6)),
             realizedPnlSol: Number(result.realizedPnlSol.toFixed(6)),
@@ -212,8 +231,10 @@ async function runMain(env = process.env, runtime = process) {
     const paperCycleDelayMs = parseNonNegativeNumber(env.PAPER_CYCLE_DELAY_MS, 0, 'PAPER_CYCLE_DELAY_MS');
     const paperBackoffBaseDelayMs = paperCycleDelayMs > 0 ? paperCycleDelayMs : DEFAULT_PAPER_BASE_DELAY_MS;
     const { orchestrator, goalAgent, variantAgent } = buildOrchestrator({
-      stopOnGoal: paperAutoStopOnGoal
+      stopOnGoal: paperAutoStopOnGoal,
+      persistedState
     });
+    activeOrchestrator = orchestrator;
     server = createDashboardServer({
       simulator: orchestrator.mainSimulator,
       logger: orchestrator.logger,
@@ -236,6 +257,9 @@ async function runMain(env = process.env, runtime = process) {
         const result = orchestrator.runCycle();
         cycleCounter += 1;
         consecutiveCycleFailures = 0;
+        if (cycleCounter % statePersistEvery === 0) {
+          await saveState(env.BOT_STATE_FILE, { orchestrator: orchestrator.snapshot() });
+        }
 
         if (result.stop) {
           logEvent('warn', 'paper-goal-stop-triggered', {
@@ -279,6 +303,20 @@ async function runMain(env = process.env, runtime = process) {
   } finally {
     if (!shuttingDown) {
       shuttingDown = true;
+      if (mode === 'paper' && activeOrchestrator) {
+        try {
+          await saveState(env.BOT_STATE_FILE, { orchestrator: activeOrchestrator.snapshot() });
+        } catch (error) {
+          logEvent('error', 'state-save-failed', { error: error.message });
+        }
+      }
+      if (mode === 'live' && activeLiveBot) {
+        try {
+          await saveState(env.BOT_STATE_FILE, { live: activeLiveBot.snapshot() });
+        } catch (error) {
+          logEvent('error', 'state-save-failed', { error: error.message });
+        }
+      }
       await closeServer(server);
       runtime.off('SIGINT', signalHandler);
       runtime.off('SIGTERM', signalHandler);
