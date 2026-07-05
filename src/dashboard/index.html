@@ -424,18 +424,24 @@
     sessionToken = '';
     sessionStorage.removeItem(KEY_SESSION);
   }
+  function isRailwayConsoleUrl(url) {
+    return /^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(url);
+  }
+  function isVercelFrontendUrl(url) {
+    return /^https?:\/\/[^/]+\.vercel\.app\b/i.test(url);
+  }
   function openModal() {
     inpUrl.value = serverUrl || window.location.origin;
     modalErr.classList.add('hidden');
     // If the saved URL is a Railway project management URL, warn the user immediately.
-    if (/^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(serverUrl)) {
+    if (isRailwayConsoleUrl(serverUrl)) {
       modalErr.textContent =
         'The saved URL is a Railway project management URL, not your deployed service URL. ' +
         'Enter the public domain assigned to your service, e.g. https://your-app.up.railway.app';
       modalErr.classList.remove('hidden');
     }
     // If the saved URL is a Vercel frontend URL, warn the user immediately.
-    if (/^https?:\/\/[^/]+\.vercel\.app\b/i.test(serverUrl)) {
+    if (isVercelFrontendUrl(serverUrl)) {
       modalErr.textContent =
         'The saved URL is a Vercel frontend URL, not a running bot backend. ' +
         'Enter the URL where your SniperBot backend is running, e.g. https://your-app.up.railway.app';
@@ -476,7 +482,8 @@
     let challengeBody = {};
     try { challengeBody = JSON.parse(challengeBodyText); } catch (_) {}
     if (!challengeRes.ok) {
-      const isHtml = challengeBodyText.trim().startsWith('<');
+      const isHtml = (challengeRes.headers.get('content-type') || '').includes('text/html') ||
+                     challengeBodyText.trim().startsWith('<');
       throw new Error(
         challengeBody.error ||
         (isHtml
@@ -636,7 +643,7 @@
   async function refresh() {
     if (!serverUrl) { setStatus('', 'Not configured'); return; }
     // Guard: Railway project management URLs are the web console, not the deployed service.
-    if (/^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(serverUrl)) {
+    if (isRailwayConsoleUrl(serverUrl)) {
       setStatus('error', 'Wrong URL');
       setError(
         'That looks like a Railway project management URL, not your deployed service URL. ' +
@@ -646,7 +653,7 @@
       return;
     }
     // Guard: Vercel frontend URLs host only the dashboard UI, not the bot backend.
-    if (/^https?:\/\/[^/]+\.vercel\.app\b/i.test(serverUrl)) {
+    if (isVercelFrontendUrl(serverUrl)) {
       setStatus('error', 'Wrong URL');
       setError(
         'That looks like a Vercel frontend URL, not a running bot backend. ' +
@@ -694,7 +701,7 @@
     if (!serverUrl) { modalErr.textContent = 'Server URL is required.'; modalErr.classList.remove('hidden'); return; }
     // Detect Railway project management URLs (railway.com/project/…) — these are the
     // Railway web console URLs, not the deployed service URL.
-    if (/^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(serverUrl)) {
+    if (isRailwayConsoleUrl(serverUrl)) {
       modalErr.textContent =
         'That looks like a Railway project management URL, not your deployed service URL. ' +
         'Use the public domain assigned to your service, e.g. https://your-app.up.railway.app';
@@ -702,7 +709,7 @@
       return;
     }
     // Detect Vercel frontend URLs (*.vercel.app) — these host the dashboard UI only, not the bot backend.
-    if (/^https?:\/\/[^/]+\.vercel\.app\b/i.test(serverUrl)) {
+    if (isVercelFrontendUrl(serverUrl)) {
       modalErr.textContent =
         'That looks like a Vercel frontend URL, not a running bot backend. ' +
         'Enter the URL where your SniperBot backend is running, e.g. https://your-app.up.railway.app';
