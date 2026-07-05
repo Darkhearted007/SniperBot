@@ -504,11 +504,14 @@
       const contentType = challengeRes.headers.get('content-type') || '';
       const isHtml = contentType.includes('text/html') ||
                      /^<!DOCTYPE\b|^<html\b/i.test(challengeBodyText.trim());
+      const bodyPreview = challengeBodyText.trim().slice(0, 150);
       throw new Error(
         challengeBody.error ||
         (isHtml
           ? 'Server returned an unexpected HTML response — make sure the Server URL points to your running SniperBot backend, not the Vercel frontend'
-          : 'Failed to create wallet challenge')
+          : bodyPreview
+            ? `Server error (HTTP ${challengeRes.status}): ${bodyPreview}`
+            : `Failed to create wallet challenge (HTTP ${challengeRes.status})`)
       );
     }
 
