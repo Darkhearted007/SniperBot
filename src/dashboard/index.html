@@ -447,6 +447,7 @@
     inpUrl.value = serverUrl || originDefault;
     inpKey.value = secretKey || '';
     modalErr.classList.add('hidden');
+    const BACKEND_URL_HINT = 'Enter the URL where your SniperBot backend is running, e.g. https://your-app.up.railway.app';
     // If the saved URL is a Railway project management URL, warn the user immediately.
     if (isRailwayConsoleUrl(serverUrl)) {
       modalErr.textContent =
@@ -457,14 +458,12 @@
     // If the saved URL is a Vercel frontend URL, warn the user immediately.
     if (isVercelFrontendUrl(serverUrl)) {
       modalErr.textContent =
-        'The saved URL is a Vercel frontend URL, not a running bot backend. ' +
-        'Enter the URL where your SniperBot backend is running, e.g. https://your-app.up.railway.app';
+        'The saved URL is a Vercel frontend URL, not a running bot backend. ' + BACKEND_URL_HINT;
       modalErr.classList.remove('hidden');
     }
     // When hosted on Vercel with no saved URL configured, guide the user.
     if (!serverUrl && isVercelFrontendUrl(window.location.origin)) {
-      modalErr.textContent =
-        'Enter the URL where your SniperBot backend is running, e.g. https://your-app.up.railway.app';
+      modalErr.textContent = BACKEND_URL_HINT;
       modalErr.classList.remove('hidden');
     }
     modal.classList.remove('hidden');
