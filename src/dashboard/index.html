@@ -434,6 +434,13 @@
         'Enter the public domain assigned to your service, e.g. https://your-app.up.railway.app';
       modalErr.classList.remove('hidden');
     }
+    // If the saved URL is a Vercel frontend URL, warn the user immediately.
+    if (/^https?:\/\/[^/]+\.vercel\.app\b/i.test(serverUrl)) {
+      modalErr.textContent =
+        'The saved URL is a Vercel frontend URL, not a running bot backend. ' +
+        'Enter the URL where your SniperBot backend is running, e.g. https://your-app.up.railway.app';
+      modalErr.classList.remove('hidden');
+    }
     modal.classList.remove('hidden');
     inpUrl.focus();
   }
@@ -465,9 +472,17 @@
     }
 
     const challengeRes = await fetch(serverUrl + '/auth/challenge?wallet=' + encodeURIComponent(walletAddress));
-    const challengeBody = await challengeRes.json().catch(() => ({}));
+    const challengeBodyText = await challengeRes.text().catch(() => '');
+    let challengeBody = {};
+    try { challengeBody = JSON.parse(challengeBodyText); } catch (_) {}
     if (!challengeRes.ok) {
-      throw new Error(challengeBody.error || 'Failed to create wallet challenge');
+      const isHtml = challengeBodyText.trim().startsWith('<');
+      throw new Error(
+        challengeBody.error ||
+        (isHtml
+          ? 'Server returned an unexpected HTML response — make sure the Server URL points to your running SniperBot backend, not the Vercel frontend'
+          : 'Failed to create wallet challenge')
+      );
     }
 
     const messageBytes = new TextEncoder().encode(challengeBody.message);
@@ -630,6 +645,16 @@
       );
       return;
     }
+    // Guard: Vercel frontend URLs host only the dashboard UI, not the bot backend.
+    if (/^https?:\/\/[^/]+\.vercel\.app\b/i.test(serverUrl)) {
+      setStatus('error', 'Wrong URL');
+      setError(
+        'That looks like a Vercel frontend URL, not a running bot backend. ' +
+        'Click ⚙ Settings and enter the URL where your SniperBot backend is running, ' +
+        'e.g. https://your-app.up.railway.app'
+      );
+      return;
+    }
     setStatus('', 'Fetching…');
     try {
       const data = await fetchSummary();
@@ -673,6 +698,14 @@
       modalErr.textContent =
         'That looks like a Railway project management URL, not your deployed service URL. ' +
         'Use the public domain assigned to your service, e.g. https://your-app.up.railway.app';
+      modalErr.classList.remove('hidden');
+      return;
+    }
+    // Detect Vercel frontend URLs (*.vercel.app) — these host the dashboard UI only, not the bot backend.
+    if (/^https?:\/\/[^/]+\.vercel\.app\b/i.test(serverUrl)) {
+      modalErr.textContent =
+        'That looks like a Vercel frontend URL, not a running bot backend. ' +
+        'Enter the URL where your SniperBot backend is running, e.g. https://your-app.up.railway.app';
       modalErr.classList.remove('hidden');
       return;
     }
