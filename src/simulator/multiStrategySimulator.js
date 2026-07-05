@@ -11,7 +11,7 @@ const { PaperTradingSimulator } = require('./paperTradingSimulator');
  */
 function createIsolatedSimulator(feed, variantConfig) {
   const learning = new LearningEngine(variantConfig);
-  const logger = new TradeLogger();
+  const logger = new TradeLogger({ maxRecords: variantConfig.maxLogRecords ?? 2000 });
   const strategy = new StrategyEngine({ learningEngine: learning, config: variantConfig });
   const executor = new PaperExecutor();
   const simulator = new PaperTradingSimulator({

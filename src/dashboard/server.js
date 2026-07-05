@@ -214,6 +214,11 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
     return typeof simulator.getActiveWatchlist === 'function' ? simulator.getActiveWatchlist() : [];
   }
 
+  // Periodically prune expired auth entries even when the dashboard is idle
+  const PRUNE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+  const pruneTimer = setInterval(pruneExpiredEntries, PRUNE_INTERVAL_MS);
+  pruneTimer.unref(); // Don't prevent the process from exiting naturally
+
   const server = http.createServer((req, res) => {
     void (async () => {
     cors(res);
@@ -438,6 +443,12 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
       res.end(JSON.stringify({ error: error.message }));
     });
   });
+
+  const originalClose = server.close.bind(server);
+  server.close = (callback) => {
+    clearInterval(pruneTimer);
+    return originalClose(callback);
+  };
 
   return server;
 }

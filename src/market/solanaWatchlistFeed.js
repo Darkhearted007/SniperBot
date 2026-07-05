@@ -18,6 +18,8 @@ function stddev(values) {
   return Math.sqrt(variance);
 }
 
+const DEFAULT_MAX_HISTORY_SIZE = 50;
+
 class SolanaWatchlistFeed {
   constructor({
     watchlist,
@@ -25,7 +27,8 @@ class SolanaWatchlistFeed {
     autoWatchlistSize = null,
     fetchImpl = fetch,
     quoteApiBase,
-    slippageBps = 100
+    slippageBps = 100,
+    maxHistorySize = DEFAULT_MAX_HISTORY_SIZE
   }) {
     this.watchlist = watchlist;
     this.watchlistCandidates = watchlistCandidates;
@@ -33,6 +36,9 @@ class SolanaWatchlistFeed {
     this.fetchImpl = fetchImpl;
     this.quoteApiBase = quoteApiBase;
     this.slippageBps = slippageBps;
+    this.maxHistorySize = Number.isFinite(maxHistorySize) && maxHistorySize > 0
+      ? Math.floor(maxHistorySize)
+      : DEFAULT_MAX_HISTORY_SIZE;
     this.history = new Map();
     this.activeWatchlist = watchlist;
   }
@@ -54,6 +60,10 @@ class SolanaWatchlistFeed {
     const changePct = prevPrice ? (priceSol - prevPrice) / prevPrice : 0;
 
     const prices = [...prior.prices, priceSol].slice(-8);
+    if (!this.history.has(token.outputMint) && this.history.size >= this.maxHistorySize) {
+      // Evict the oldest entry (Maps preserve insertion order)
+      this.history.delete(this.history.keys().next().value);
+    }
     this.history.set(token.outputMint, { prices });
 
     const returns = prices.slice(1).map((value, index) => (value - prices[index]) / prices[index]);
