@@ -51,7 +51,14 @@ npm install
 DASHBOARD_SECRET_KEY=mysecret npm start
 ```
 
-The bot runs a simulation loop and starts the dashboard API + web UI on port 3000 (configurable via `PORT`).
+The bot starts the dashboard API + web UI on port 3000 (configurable via `PORT`) and now runs continuously until you stop it (for example with `Ctrl+C` / `SIGTERM`).
+
+### Startup and shutdown
+
+- Start: `DASHBOARD_SECRET_KEY=mysecret npm start`
+- Graceful stop: `Ctrl+C` (SIGINT) or `kill <pid>` (SIGTERM)
+- Shutdown behavior: current cycle finishes, server closes, then process exits cleanly.
+- Health check: `GET /health` (requires dashboard auth header/session).
 
 ## Live Solana trading
 
@@ -96,6 +103,8 @@ npm start
 ### Optional environment variables
 
 - `LIVE_POLL_INTERVAL_MS` – default `15000`
+- `PAPER_CYCLE_DELAY_MS` – paper-mode delay between cycles (ms), default `0` (as fast as possible)
+- `PAPER_AUTO_STOP_ON_GOAL` – if true, paper mode stops when goal/deadline is hit; default `false` for long-running operation
 - `LIVE_MIN_SOL_RESERVE` – default `0.02`
 - `LIVE_MAX_BANKROLL_SOL` – optional cap for strategy sizing
 - `LIVE_AUTO_WATCHLIST_SIZE` – top candidate count to keep in the active watchlist
@@ -235,6 +244,13 @@ Authentication (one of):
 ```bash
 npm test
 ```
+
+## Troubleshooting startup and early exits
+
+- If the process exits during startup, check structured logs for `fatal-startup-error`.
+- In live mode, missing required env vars (`SOLANA_RPC_URL`, `SOLANA_WALLET_SECRET`, and watchlist config) fail fast with actionable errors.
+- In paper mode, ensure `PAPER_CYCLE_DELAY_MS` is a non-negative number.
+- Runtime failures now log as structured events (`live-cycle-failed` / `paper-cycle-failed`) with retry/backoff context.
 
 ## CI
 

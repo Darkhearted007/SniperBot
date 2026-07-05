@@ -209,6 +209,20 @@ test('OrchestratorAgent: stops when deadline is expired', () => {
   assert.equal(result.reason, 'time-expired');
 });
 
+test('OrchestratorAgent: continues when stopOnGoal is disabled', () => {
+  const feed = createOpportunityFeed();
+  const goalAgent = new GoalAgent({
+    goalSol: 0.001,
+    durationMs: 86400000,
+    startTime: Date.now()
+  });
+  const orchestrator = new OrchestratorAgent({ feed, goalAgent, stopOnGoal: false });
+  const result = orchestrator.runCycle();
+  assert.equal(result.stop, false);
+  assert.equal(result.reason, null);
+  assert.equal(result.cycle, 1);
+});
+
 test('OrchestratorAgent: accumulates cycle count across multiple calls', () => {
   const feed = createOpportunityFeed();
   const orchestrator = new OrchestratorAgent({ feed });
