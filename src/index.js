@@ -27,12 +27,18 @@ function buildApp() {
   return { simulator, logger, learning };
 }
 
-function buildOrchestrator() {
+function buildOrchestrator({ stopOnGoal = true } = {}) {
   const feed = createOpportunityFeed();
   const goalAgent = new GoalAgent();
   const patternAgent = new PatternAgent();
   const variantAgent = new StrategyVariantAgent({ feed });
-  const orchestrator = new OrchestratorAgent({ feed, goalAgent, patternAgent, variantAgent });
+  const orchestrator = new OrchestratorAgent({
+    feed,
+    goalAgent,
+    patternAgent,
+    variantAgent,
+    stopOnGoal
+  });
   return { orchestrator, goalAgent, variantAgent, patternAgent };
 }
 
@@ -85,88 +91,209 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-if (require.main === module) {
-  (async () => {
-    const mode = getTradingMode(process.env);
-    const port = Number(process.env.PORT || 3000);
+function parseBoolean(value) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
+}
 
+function parseNonNegativeNumber(value, defaultValue, fieldName = 'Parameter') {
+  if (value == null || value === '') return defaultValue;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${fieldName} must be a non-negative number`);
+  }
+  return parsed;
+}
+
+function logEvent(level, message, context = {}) {
+  const logger = level === 'error' ? console.error : console.log;
+  logger(JSON.stringify({
+    ts: new Date().toISOString(),
+    level,
+    message,
+    ...context
+  }));
+}
+
+function closeServer(server) {
+  return new Promise((resolve) => {
+    if (!server || !server.listening) {
+      resolve();
+      return;
+    }
+    server.close(() => resolve());
+  });
+}
+
+const MAX_LIVE_BACKOFF_MS = 60 * 1000;
+const MAX_PAPER_BACKOFF_MS = 5 * 1000;
+const DEFAULT_PAPER_BASE_DELAY_MS = 50;
+const PAPER_PROGRESS_LOG_INTERVAL = 50;
+
+async function runMain(env = process.env, runtime = process) {
+  const mode = getTradingMode(env);
+  const port = Number(env.PORT || 3000);
+  const shutdown = {
+    requested: false,
+    reason: null
+  };
+  let server = null;
+  let shuttingDown = false;
+
+  const requestShutdown = (reason) => {
+    if (shutdown.requested) return;
+    shutdown.requested = true;
+    shutdown.reason = reason;
+    logEvent('warn', 'shutdown-requested', { reason });
+  };
+
+  const signalHandler = (signal) => requestShutdown(`signal:${signal}`);
+  const unhandledRejectionHandler = (reason) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    logEvent('error', 'unhandled-rejection', { error: error.message });
+    runtime.exitCode = 1;
+    requestShutdown('unhandled-rejection');
+  };
+  const uncaughtExceptionHandler = (error) => {
+    logEvent('error', 'uncaught-exception', { error: error.message });
+    runtime.exitCode = 1;
+    requestShutdown('uncaught-exception');
+  };
+
+  runtime.on('SIGINT', signalHandler);
+  runtime.on('SIGTERM', signalHandler);
+  runtime.on('unhandledRejection', unhandledRejectionHandler);
+  runtime.on('uncaughtException', uncaughtExceptionHandler);
+
+  try {
     if (mode === 'live') {
-      const { bot, logger, goalAgent, liveConfig, client } = await buildLiveApp(process.env);
-      const server = createDashboardServer({
+      const { bot, logger, goalAgent, liveConfig, client } = await buildLiveApp(env);
+      server = createDashboardServer({
         simulator: bot,
         logger,
         goalAgent,
         variantAgent: null
       });
       server.listen(port, () => {
-        // eslint-disable-next-line no-console
-        console.log(`Dashboard running on :${port}`);
-        console.log(`Live trading enabled for wallet ${client.walletAddress}`);
+        logEvent('info', 'dashboard-started', { port, mode: 'live' });
+        logEvent('info', 'live-trading-enabled', { walletAddress: client.walletAddress });
       });
 
-      // eslint-disable-next-line no-console
-      console.log('Live bot started — polling configured Solana watchlist…');
-      while (true) {
+      logEvent('info', 'live-loop-started', { pollIntervalMs: liveConfig.pollIntervalMs });
+      let consecutiveCycleFailures = 0;
+      while (!shutdown.requested) {
         try {
           const result = await bot.runCycle();
-          // eslint-disable-next-line no-console
-          console.log(
-            `Live cycle | bankroll: ${result.bankrollSol.toFixed(6)} SOL` +
-            ` | realized pnl: ${result.realizedPnlSol.toFixed(6)} SOL` +
-            ` | open positions: ${result.openPositions}`
-          );
+          consecutiveCycleFailures = 0;
+          logEvent('info', 'live-cycle-complete', {
+            bankrollSol: Number(result.bankrollSol.toFixed(6)),
+            realizedPnlSol: Number(result.realizedPnlSol.toFixed(6)),
+            openPositions: result.openPositions
+          });
         } catch (error) {
-          // eslint-disable-next-line no-console
-          console.error(`Live cycle failed: ${error.message}`);
+          consecutiveCycleFailures += 1;
+          const backoffMs = Math.min(
+            liveConfig.pollIntervalMs * 2 ** (consecutiveCycleFailures - 1),
+            MAX_LIVE_BACKOFF_MS
+          );
+          logEvent('error', 'live-cycle-failed', {
+            error: error.message,
+            consecutiveFailures: consecutiveCycleFailures,
+            backoffMs
+          });
+          await sleep(backoffMs);
+          continue;
         }
         await sleep(liveConfig.pollIntervalMs);
       }
       return;
     }
 
-    const { orchestrator, goalAgent, variantAgent } = buildOrchestrator();
-    const server = createDashboardServer({
+    const paperAutoStopOnGoal = parseBoolean(env.PAPER_AUTO_STOP_ON_GOAL);
+    const paperCycleDelayMs = parseNonNegativeNumber(env.PAPER_CYCLE_DELAY_MS, 0, 'PAPER_CYCLE_DELAY_MS');
+    const paperBackoffBaseDelayMs = paperCycleDelayMs > 0 ? paperCycleDelayMs : DEFAULT_PAPER_BASE_DELAY_MS;
+    const { orchestrator, goalAgent, variantAgent } = buildOrchestrator({
+      stopOnGoal: paperAutoStopOnGoal
+    });
+    server = createDashboardServer({
       simulator: orchestrator.mainSimulator,
       logger: orchestrator.logger,
       goalAgent,
       variantAgent
     });
     server.listen(port, () => {
-      // eslint-disable-next-line no-console
-      console.log(`Dashboard running on :${port}`);
-      console.log(`Goal: ${orchestrator.config.goalSol} SOL in 24 hours (auto-stop enabled)`);
+      logEvent('info', 'dashboard-started', { port, mode: 'paper' });
+      logEvent('info', 'goal-tracking-configured', {
+        goalSol: orchestrator.config.goalSol,
+        autoStopOnGoal: paperAutoStopOnGoal
+      });
     });
 
-    // Simulation loop — cycles as fast as possible in paper-trading mode.
-    (async () => {
-      // eslint-disable-next-line no-console
-      console.log('Orchestrator started — running strategy discovery cycles…');
-      for (let i = 0; i < 10000; i++) {
+    logEvent('info', 'paper-loop-started', { cycleDelayMs: paperCycleDelayMs });
+    let cycleCounter = 0;
+    let consecutiveCycleFailures = 0;
+    while (!shutdown.requested) {
+      try {
         const result = orchestrator.runCycle();
+        cycleCounter += 1;
+        consecutiveCycleFailures = 0;
+
         if (result.stop) {
-          // eslint-disable-next-line no-console
-          console.log(`\n🏁 Bot stopped after ${result.cycle} cycles: ${result.reason}`);
-          // eslint-disable-next-line no-console
-          console.log(`   Final equity: ${result.goalStatus.equity.toFixed(6)} SOL`);
-          // eslint-disable-next-line no-console
-          console.log(`   Progress to goal: ${(result.goalStatus.progress * 100).toFixed(1)}%`);
+          logEvent('warn', 'paper-goal-stop-triggered', {
+            cycle: result.cycle,
+            reason: result.reason,
+            equity: Number(result.goalStatus.equity.toFixed(6))
+          });
+          requestShutdown('paper-goal-stop');
           break;
         }
-        if (i % 50 === 0) {
-          // eslint-disable-next-line no-console
-          console.log(
-            `Cycle ${result.cycle} | equity: ${result.goalStatus.equity.toFixed(6)} SOL` +
-            ` (${(result.goalStatus.progress * 100).toFixed(1)}%) | variant: ${result.activeVariant}`
-          );
-          await sleep(0);
+
+        if (cycleCounter % PAPER_PROGRESS_LOG_INTERVAL === 0) {
+          logEvent('info', 'paper-cycle-progress', {
+            cycle: result.cycle,
+            equity: Number(result.goalStatus.equity.toFixed(6)),
+            progressPct: Number((result.goalStatus.progress * 100).toFixed(1)),
+            activeVariant: result.activeVariant
+          });
         }
+      } catch (error) {
+        consecutiveCycleFailures += 1;
+        const backoffMs = Math.min(
+          paperBackoffBaseDelayMs * 2 ** (consecutiveCycleFailures - 1),
+          MAX_PAPER_BACKOFF_MS
+        );
+        logEvent('error', 'paper-cycle-failed', {
+          error: error.message,
+          consecutiveFailures: consecutiveCycleFailures,
+          backoffMs
+        });
+        await sleep(backoffMs);
+        continue;
       }
-    })();
-  })().catch((error) => {
-    // eslint-disable-next-line no-console
-    console.error(error);
+
+      if (paperCycleDelayMs > 0) {
+        await sleep(paperCycleDelayMs);
+      } else if (cycleCounter % PAPER_PROGRESS_LOG_INTERVAL === 0) {
+        await sleep(0);
+      }
+    }
+  } finally {
+    if (!shuttingDown) {
+      shuttingDown = true;
+      await closeServer(server);
+      runtime.off('SIGINT', signalHandler);
+      runtime.off('SIGTERM', signalHandler);
+      runtime.off('unhandledRejection', unhandledRejectionHandler);
+      runtime.off('uncaughtException', uncaughtExceptionHandler);
+      logEvent('info', 'shutdown-complete', { reason: shutdown.reason || 'unknown' });
+    }
+  }
+}
+
+if (require.main === module) {
+  runMain(process.env).catch((error) => {
+    logEvent('error', 'fatal-startup-error', { error: error.message });
     process.exitCode = 1;
   });
 }
 
-module.exports = { buildApp, buildOrchestrator, buildLiveApp };
+module.exports = { buildApp, buildOrchestrator, buildLiveApp, runMain, logEvent };

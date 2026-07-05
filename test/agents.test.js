@@ -8,6 +8,8 @@ const { OrchestratorAgent } = require('../src/agents/orchestratorAgent');
 const { createOpportunityFeed } = require('../src/market/opportunityFeed');
 const { RISK_CONFIG, STRATEGY_VARIANTS } = require('../src/config/risk');
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
 // ─────────────────────────────────────────────
 // GoalAgent tests
 // ─────────────────────────────────────────────
@@ -187,7 +189,7 @@ test('OrchestratorAgent: stops immediately when goal already met', () => {
   // Set goal very low so it's met immediately
   const goalAgent = new GoalAgent({
     goalSol: 0.001,
-    durationMs: 86400000,
+    durationMs: ONE_DAY_MS,
     startTime: Date.now()
   });
   const orchestrator = new OrchestratorAgent({ feed, goalAgent });
@@ -207,6 +209,20 @@ test('OrchestratorAgent: stops when deadline is expired', () => {
   const result = orchestrator.runCycle();
   assert.equal(result.stop, true);
   assert.equal(result.reason, 'time-expired');
+});
+
+test('OrchestratorAgent: continues when stopOnGoal is disabled', () => {
+  const feed = createOpportunityFeed();
+  const goalAgent = new GoalAgent({
+    goalSol: 0.001,
+    durationMs: ONE_DAY_MS,
+    startTime: Date.now()
+  });
+  const orchestrator = new OrchestratorAgent({ feed, goalAgent, stopOnGoal: false });
+  const result = orchestrator.runCycle();
+  assert.equal(result.stop, false);
+  assert.equal(result.reason, null);
+  assert.equal(result.cycle, 1);
 });
 
 test('OrchestratorAgent: accumulates cycle count across multiple calls', () => {

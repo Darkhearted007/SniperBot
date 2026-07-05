@@ -30,7 +30,14 @@ class OrchestratorAgent {
    * @param {object} [opts.variantAgent]  - StrategyVariantAgent instance (created if omitted)
    * @param {object} [opts.config]        - Base risk config (defaults to RISK_CONFIG)
    */
-  constructor({ feed, goalAgent, patternAgent, variantAgent, config = RISK_CONFIG }) {
+  constructor({
+    feed,
+    goalAgent,
+    patternAgent,
+    variantAgent,
+    config = RISK_CONFIG,
+    stopOnGoal = true
+  }) {
     this.feed = feed;
     this.config = config;
     this.cycleCount = 0;
@@ -43,6 +50,7 @@ class OrchestratorAgent {
     this.patternAgent = patternAgent || new PatternAgent();
 
     this.variantAgent = variantAgent || new StrategyVariantAgent({ feed });
+    this.stopOnGoal = stopOnGoal;
 
     // Main simulator — strategy config is hot-swapped after each variant cycle
     this._mainLearning = new LearningEngine(config);
@@ -102,7 +110,7 @@ class OrchestratorAgent {
 
     // 1. Goal check — hard stop
     const goalStatus = this.goalAgent.checkGoal(this.mainSimulator.state);
-    if (goalStatus.stop) {
+    if (this.stopOnGoal && goalStatus.stop) {
       return {
         stop: true,
         reason: goalStatus.achieved ? 'goal-achieved' : 'time-expired',
@@ -136,9 +144,12 @@ class OrchestratorAgent {
     // 6. Final goal re-check (position may have exited this cycle)
     const goalStatusPost = this.goalAgent.checkGoal(this.mainSimulator.state);
 
+    const shouldStop = this.stopOnGoal && goalStatusPost.stop;
     return {
-      stop: goalStatusPost.stop,
-      reason: goalStatusPost.achieved ? 'goal-achieved' : goalStatusPost.expired ? 'time-expired' : null,
+      stop: shouldStop,
+      reason: shouldStop
+        ? (goalStatusPost.achieved ? 'goal-achieved' : goalStatusPost.expired ? 'time-expired' : null)
+        : null,
       cycle: this.cycleCount,
       goalStatus: goalStatusPost,
       activeVariant: this.activeVariantName,
