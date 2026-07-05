@@ -73,10 +73,8 @@ test('paper simulator exits position on take-profit and learns from outcome', ()
   assert.ok(learning.stats.wins + learning.stats.losses >= 1, 'learning should update stats after exit');
 });
 
-test('dashboard auth supports secret key and real wallet sessions', async () => {
-  const previousSecret = process.env.DASHBOARD_SECRET_KEY;
+test('dashboard auth requires wallet session', async () => {
   const previousAllowedWallets = process.env.DASHBOARD_ALLOWED_WALLETS;
-  process.env.DASHBOARD_SECRET_KEY = 'abc123';
   const walletIdentity = createWalletIdentity();
   process.env.DASHBOARD_ALLOWED_WALLETS = walletIdentity.walletAddress;
 
@@ -91,9 +89,6 @@ test('dashboard auth supports secret key and real wallet sessions', async () => 
 
     const unauthorized = await fetch(`http://127.0.0.1:${port}/dashboard`);
     assert.equal(unauthorized.status, 401);
-
-    const secretAuth = await fetch(`http://127.0.0.1:${port}/dashboard`, { headers: { 'x-secret-key': 'abc123' } });
-    assert.equal(secretAuth.status, 200);
 
     const challengeRes = await fetch(
       `http://127.0.0.1:${port}/auth/challenge?wallet=${encodeURIComponent(walletIdentity.walletAddress)}`
@@ -120,9 +115,6 @@ test('dashboard auth supports secret key and real wallet sessions', async () => 
 
     await new Promise((resolve) => server.close(resolve));
   } finally {
-    if (previousSecret === undefined) delete process.env.DASHBOARD_SECRET_KEY;
-    else process.env.DASHBOARD_SECRET_KEY = previousSecret;
-
     if (previousAllowedWallets === undefined) delete process.env.DASHBOARD_ALLOWED_WALLETS;
     else process.env.DASHBOARD_ALLOWED_WALLETS = previousAllowedWallets;
 
@@ -131,43 +123,10 @@ test('dashboard auth supports secret key and real wallet sessions', async () => 
   }
 });
 
-test('dashboard auth accepts percent-encoded secret key containing non-ASCII characters', async () => {
-  const previousSecret = process.env.DASHBOARD_SECRET_KEY;
-  const unicodeKey = 's\u00e9cret\u4e2d\u6587\ud83d\ude80'; // contains non-ISO-8859-1 code points
-  process.env.DASHBOARD_SECRET_KEY = unicodeKey;
-
-  try {
-    // require a fresh module instance so the new secret is picked up
-    const serverModPath = require.resolve('../src/dashboard/server');
-    delete require.cache[serverModPath];
-    const { createDashboardServer } = require('../src/dashboard/server');
-    const { simulator, logger } = buildApp();
-    const server = createDashboardServer({ simulator, logger });
-    await new Promise((resolve) => server.listen(0, resolve));
-    const port = server.address().port;
-
-    const encodedAuth = await fetch(`http://127.0.0.1:${port}/dashboard`, {
-      headers: { 'x-secret-key': encodeURIComponent(unicodeKey) }
-    });
-    assert.equal(encodedAuth.status, 200);
-
-    const wrongKey = await fetch(`http://127.0.0.1:${port}/dashboard`, {
-      headers: { 'x-secret-key': encodeURIComponent('wrongkey') }
-    });
-    assert.equal(wrongKey.status, 401);
-
-    await new Promise((resolve) => server.close(resolve));
-  } finally {
-    if (previousSecret === undefined) delete process.env.DASHBOARD_SECRET_KEY;
-    else process.env.DASHBOARD_SECRET_KEY = previousSecret;
-    const serverModPath = require.resolve('../src/dashboard/server');
-    delete require.cache[serverModPath];
-  }
-});
-
-test('dashboard auth trims whitespace from DASHBOARD_SECRET_KEY env var', async () => {
-  const previousSecret = process.env.DASHBOARD_SECRET_KEY;
-  process.env.DASHBOARD_SECRET_KEY = '  mykey\n'; // simulate env var with surrounding whitespace
+test('dashboard auth rejects x-secret-key header', async () => {
+  const previousAllowedWallets = process.env.DASHBOARD_ALLOWED_WALLETS;
+  const walletIdentity = createWalletIdentity();
+  process.env.DASHBOARD_ALLOWED_WALLETS = walletIdentity.walletAddress;
 
   try {
     const serverModPath = require.resolve('../src/dashboard/server');
@@ -178,30 +137,25 @@ test('dashboard auth trims whitespace from DASHBOARD_SECRET_KEY env var', async 
     await new Promise((resolve) => server.listen(0, resolve));
     const port = server.address().port;
 
-    // Key without surrounding whitespace should be accepted (percent-encoded)
-    const trimmedAuth = await fetch(`http://127.0.0.1:${port}/dashboard`, {
-      headers: { 'x-secret-key': encodeURIComponent('mykey') }
+    const secretAttempt = await fetch(`http://127.0.0.1:${port}/dashboard`, {
+      headers: { 'x-secret-key': 'any-value' }
     });
-    assert.equal(trimmedAuth.status, 200);
-
-    // Also works when the key is sent without URI encoding (plain ASCII key)
-    const rawAuth = await fetch(`http://127.0.0.1:${port}/dashboard`, {
-      headers: { 'x-secret-key': 'mykey' }
-    });
-    assert.equal(rawAuth.status, 200);
+    assert.equal(secretAttempt.status, 401);
 
     await new Promise((resolve) => server.close(resolve));
   } finally {
-    if (previousSecret === undefined) delete process.env.DASHBOARD_SECRET_KEY;
-    else process.env.DASHBOARD_SECRET_KEY = previousSecret;
+    if (previousAllowedWallets === undefined) delete process.env.DASHBOARD_ALLOWED_WALLETS;
+    else process.env.DASHBOARD_ALLOWED_WALLETS = previousAllowedWallets;
+
     const serverModPath = require.resolve('../src/dashboard/server');
     delete require.cache[serverModPath];
   }
 });
 
 test('dashboard exposes supervised decision endpoints when available', async () => {
-  const previousSecret = process.env.DASHBOARD_SECRET_KEY;
-  process.env.DASHBOARD_SECRET_KEY = 'abc123';
+  const previousAllowedWallets = process.env.DASHBOARD_ALLOWED_WALLETS;
+  const walletIdentity = createWalletIdentity();
+  process.env.DASHBOARD_ALLOWED_WALLETS = walletIdentity.walletAddress;
 
   try {
     const serverModPath = require.resolve('../src/dashboard/server');
@@ -241,8 +195,25 @@ test('dashboard exposes supervised decision endpoints when available', async () 
     await new Promise((resolve) => server.listen(0, resolve));
     const port = server.address().port;
 
+    // Obtain a wallet session token
+    const challengeRes = await fetch(
+      `http://127.0.0.1:${port}/auth/challenge?wallet=${encodeURIComponent(walletIdentity.walletAddress)}`
+    );
+    const challenge = await challengeRes.json();
+    const verifyRes = await fetch(`http://127.0.0.1:${port}/auth/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        challengeId: challenge.challengeId,
+        walletAddress: walletIdentity.walletAddress,
+        signature: walletIdentity.signMessage(challenge.message)
+      })
+    });
+    const { token } = await verifyRes.json();
+    const authHeader = { authorization: 'Bearer ' + token };
+
     const pending = await fetch(`http://127.0.0.1:${port}/pending-decisions`, {
-      headers: { 'x-secret-key': 'abc123' }
+      headers: authHeader
     });
     assert.equal(pending.status, 200);
     const pendingJson = await pending.json();
@@ -250,28 +221,22 @@ test('dashboard exposes supervised decision endpoints when available', async () 
 
     const approved = await fetch(`http://127.0.0.1:${port}/decisions/approve`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-secret-key': 'abc123'
-      },
+      headers: { 'content-type': 'application/json', ...authHeader },
       body: JSON.stringify({ id: 'decision-1' })
     });
     assert.equal(approved.status, 200);
 
     const rejected = await fetch(`http://127.0.0.1:${port}/decisions/reject`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-secret-key': 'abc123'
-      },
+      headers: { 'content-type': 'application/json', ...authHeader },
       body: JSON.stringify({ id: 'decision-1', reason: 'operator-rejected' })
     });
     assert.equal(rejected.status, 200);
 
     await new Promise((resolve) => server.close(resolve));
   } finally {
-    if (previousSecret === undefined) delete process.env.DASHBOARD_SECRET_KEY;
-    else process.env.DASHBOARD_SECRET_KEY = previousSecret;
+    if (previousAllowedWallets === undefined) delete process.env.DASHBOARD_ALLOWED_WALLETS;
+    else process.env.DASHBOARD_ALLOWED_WALLETS = previousAllowedWallets;
     const serverModPath = require.resolve('../src/dashboard/server');
     delete require.cache[serverModPath];
   }

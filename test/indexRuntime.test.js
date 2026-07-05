@@ -10,8 +10,7 @@ test('runMain validates PAPER_CYCLE_DELAY_MS as non-negative', async () => {
     runMain({
       TRADING_MODE: 'paper',
       PAPER_CYCLE_DELAY_MS: '-1',
-      PORT: '0',
-      DASHBOARD_SECRET_KEY: 'test-secret'
+      PORT: '0'
     }),
     /PAPER_CYCLE_DELAY_MS must be a non-negative number/
   );
@@ -23,8 +22,7 @@ test('runMain handles SIGTERM with graceful shutdown in paper mode', async () =>
   const runPromise = runMain({
     TRADING_MODE: 'paper',
     PAPER_CYCLE_DELAY_MS: '1',
-    PORT: '0',
-    DASHBOARD_SECRET_KEY: 'test-secret'
+    PORT: '0'
   }, runtime);
 
   setTimeout(() => {

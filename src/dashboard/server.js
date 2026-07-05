@@ -6,13 +6,6 @@ const path = require('node:path');
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 
-function safeEqual(a, b) {
-  const aBuf = Buffer.from(a || '');
-  const bBuf = Buffer.from(b || '');
-  if (aBuf.length !== bBuf.length) return false;
-  return crypto.timingSafeEqual(aBuf, bBuf);
-}
-
 function decodeBase58(value) {
   if (!value || typeof value !== 'string') {
     throw new Error('Wallet address is required');
@@ -90,7 +83,6 @@ function readJsonBody(req) {
 }
 
 function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
-  const secret = (process.env.DASHBOARD_SECRET_KEY || '').trim() || undefined;
   const allowedWallets = new Set(
     String(process.env.DASHBOARD_ALLOWED_WALLETS || '')
       .split(',')
@@ -172,7 +164,7 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader(
       'Access-Control-Allow-Headers',
-      'authorization, x-secret-key, content-type'
+      'authorization, content-type'
     );
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   }
@@ -194,11 +186,6 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
       authSessions.delete(sessionToken);
     }
 
-    const secretHeader = req.headers['x-secret-key'];
-    let decodedHeader;
-    try { decodedHeader = secretHeader ? decodeURIComponent(secretHeader) : secretHeader; }
-    catch (_) { decodedHeader = secretHeader; } // malformed percent-encoding: compare as-is (will fail auth)
-    if (secret && decodedHeader && safeEqual(decodedHeader, secret)) return true;
     return false;
   }
 
@@ -322,7 +309,7 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
 
     if (!auth(req)) {
       res.writeHead(401, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Unauthorized: use a wallet session or secret key' }));
+      res.end(JSON.stringify({ error: 'Unauthorized: connect a Solana wallet to sign in' }));
       return;
     }
 
