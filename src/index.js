@@ -5,6 +5,7 @@ const { PaperExecutor } = require('./execution/paperExecutor');
 const { SolanaLiveExecutor } = require('./execution/solanaLiveExecutor');
 const { createOpportunityFeed } = require('./market/opportunityFeed');
 const { SolanaWatchlistFeed } = require('./market/solanaWatchlistFeed');
+const { PoolDiscoveryFeed } = require('./market/poolDiscoveryFeed');
 const { PaperTradingSimulator } = require('./simulator/paperTradingSimulator');
 const { createDashboardServer } = require('./dashboard/server');
 const { OrchestratorAgent } = require('./agents/orchestratorAgent');
@@ -13,6 +14,7 @@ const { PatternAgent } = require('./agents/patternAgent');
 const { StrategyVariantAgent } = require('./agents/strategyVariantAgent');
 const { LiveTradingBot } = require('./live/liveTradingBot');
 const { SolanaRpcClient } = require('./live/solanaRpcClient');
+const { SolanaSafetyProvider } = require('./safety/onChainSafety');
 const { TradeApprovalQueue } = require('./live/tradeApprovalQueue');
 const { getTradingMode, parseLiveTradingConfig } = require('./live/config');
 const { loadState, saveState } = require('./learning/stateStore');
@@ -75,6 +77,28 @@ async function buildLiveApp(env = process.env, persistedState = null) {
     quoteApiBase: liveConfig.quoteApiBase,
     slippageBps: liveConfig.slippageBps
   });
+
+  let poolDiscoveryFeed = null;
+  if (liveConfig.poolDiscoveryEnabled) {
+    poolDiscoveryFeed = new PoolDiscoveryFeed({
+      wsUrl: liveConfig.wsUrl,
+      rpcUrl: liveConfig.rpcUrl,
+      programIds: liveConfig.poolDiscoveryProgramIds,
+      maxCandidates: liveConfig.poolDiscoveryMaxCandidates,
+      onError: (error) => logEvent('error', 'pool-discovery-error', { error: error.message }),
+      onStatus: (status) => logEvent('info', 'pool-discovery-status', status)
+    }).start();
+    feed.dynamicCandidateSource = poolDiscoveryFeed;
+  }
+
+  const safetyProvider = liveConfig.requireOnChainSafety
+    ? new SolanaSafetyProvider({
+      rpcUrl: liveConfig.rpcUrl,
+      quoteApiBase: liveConfig.quoteApiBase,
+      cacheTtlMs: liveConfig.safetyCacheTtlMs
+    })
+    : null;
+
   const approvalQueue = new TradeApprovalQueue();
   const bot = new LiveTradingBot({
     strategy,
@@ -84,14 +108,15 @@ async function buildLiveApp(env = process.env, persistedState = null) {
     feed,
     goalAgent,
     supervisionMode: liveConfig.supervisionMode,
-    approvalQueue
+    approvalQueue,
+    safetyProvider
   });
   await bot.initialize();
   if (persistedState?.live) {
     bot.restore(persistedState.live);
   }
 
-  return { bot, logger, learning, goalAgent, liveConfig, client };
+  return { bot, logger, learning, goalAgent, liveConfig, client, poolDiscoveryFeed };
 }
 
 function sleep(ms) {
@@ -180,7 +205,7 @@ async function runMain(env = process.env, runtime = process) {
 
   try {
     if (mode === 'live') {
-      const { bot, logger, goalAgent, liveConfig, client } = await buildLiveApp(env, persistedState);
+      const { bot, logger, goalAgent, liveConfig, client, poolDiscoveryFeed } = await buildLiveApp(env, persistedState);
       activeLiveBot = bot;
       server = createDashboardServer({
         simulator: bot,
@@ -223,6 +248,9 @@ async function runMain(env = process.env, runtime = process) {
           continue;
         }
         await sleep(liveConfig.pollIntervalMs);
+      }
+      if (poolDiscoveryFeed) {
+        poolDiscoveryFeed.stop();
       }
       return;
     }

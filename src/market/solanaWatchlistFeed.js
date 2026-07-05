@@ -28,7 +28,8 @@ class SolanaWatchlistFeed {
     fetchImpl = fetch,
     quoteApiBase,
     slippageBps = 100,
-    maxHistorySize = DEFAULT_MAX_HISTORY_SIZE
+    maxHistorySize = DEFAULT_MAX_HISTORY_SIZE,
+    dynamicCandidateSource = null
   }) {
     this.watchlist = watchlist;
     this.watchlistCandidates = watchlistCandidates;
@@ -39,8 +40,28 @@ class SolanaWatchlistFeed {
     this.maxHistorySize = Number.isFinite(maxHistorySize) && maxHistorySize > 0
       ? Math.floor(maxHistorySize)
       : DEFAULT_MAX_HISTORY_SIZE;
+    this.dynamicCandidateSource = dynamicCandidateSource;
     this.history = new Map();
     this.activeWatchlist = watchlist;
+  }
+
+  /**
+   * Merges the static watchlistCandidates (from SOLANA_AUTO_WATCHLIST_JSON)
+   * with anything a live PoolDiscoveryFeed has surfaced since the last
+   * cycle, de-duplicating by outputMint so a token isn't scored twice.
+   */
+  getCandidateSourceList() {
+    const dynamic = typeof this.dynamicCandidateSource?.getCandidates === 'function'
+      ? this.dynamicCandidateSource.getCandidates()
+      : [];
+    if (dynamic.length === 0) return this.watchlistCandidates;
+    const byMint = new Map(this.watchlistCandidates.map((token) => [token.outputMint, token]));
+    for (const token of dynamic) {
+      if (!byMint.has(token.outputMint)) {
+        byMint.set(token.outputMint, token);
+      }
+    }
+    return [...byMint.values()];
   }
 
   async fetchOpportunity(token) {
@@ -95,6 +116,7 @@ class SolanaWatchlistFeed {
       venue: token.venue,
       liquidityUsd: token.liquidityUsd,
       rugScore: token.rugScore,
+      lpMint: token.lpMint || null,
       tokenCategory: token.tokenCategory || 'uncategorized',
       momentumScore,
       volatilityRisk,
@@ -115,7 +137,8 @@ class SolanaWatchlistFeed {
   }
 
   async list() {
-    const sourceWatchlist = this.watchlistCandidates.length > 0 ? this.watchlistCandidates : this.watchlist;
+    const candidateSourceList = this.getCandidateSourceList();
+    const sourceWatchlist = candidateSourceList.length > 0 ? candidateSourceList : this.watchlist;
     const settled = await Promise.allSettled(sourceWatchlist.map((token) => this.fetchOpportunity(token)));
     const opportunities = settled.flatMap((result, index) => {
       if (result.status !== 'fulfilled') return [];
@@ -131,7 +154,7 @@ class SolanaWatchlistFeed {
       throw firstError ? firstError.reason : new Error('No live opportunities available');
     }
 
-    const ranked = this.watchlistCandidates.length > 0
+    const ranked = candidateSourceList.length > 0
       ? [...opportunities]
         .sort((left, right) => right.score - left.score)
         .slice(0, this.autoWatchlistSize ?? opportunities.length)

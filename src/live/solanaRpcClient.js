@@ -126,4 +126,4 @@ class SolanaRpcClient {
   }
 }
 
-module.exports = { SolanaRpcClient, parseWalletSecretBytes };
+module.exports = { SolanaRpcClient, parseWalletSecretBytes, rpcRequest };

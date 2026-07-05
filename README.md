@@ -117,6 +117,12 @@ npm start
 - `DASHBOARD_SESSION_TTL_MS` – wallet session lifetime, default `43200000`
 - `JUPITER_QUOTE_API_BASE`
 - `JUPITER_SWAP_API_BASE`
+- `LIVE_REQUIRE_ONCHAIN_SAFETY` – enable the on-chain safety pipeline (see below); default `false`
+- `SAFETY_CACHE_TTL_MS` – how long computed on-chain safety results are cached per mint, default `60000`
+- `LIVE_POOL_DISCOVERY` – enable real-time new-pool/pair discovery (see below); default `false`
+- `SOLANA_WS_URL` – Solana websocket RPC endpoint, required when `LIVE_POOL_DISCOVERY=true`
+- `POOL_DISCOVERY_PROGRAMS` – comma-separated program IDs to watch; defaults to Raydium AMM v4, Raydium CPMM, and Pump.fun
+- `POOL_DISCOVERY_MAX_CANDIDATES` – rolling cap on discovered candidates kept in memory, default `25`
 
 ### Live-mode behavior
 
@@ -127,6 +133,31 @@ npm start
 - The bot expects a dedicated SOL-funded wallet; pre-existing token holdings are not imported into bot state
 - `SOLANA_WATCHLIST_JSON` should include `liquidityUsd` and `rugScore`; missing values default to conservative safety values and will usually block entries
 - Supervised mode queues entry and exit decisions until an authenticated operator approves or rejects them through the dashboard API
+- Each watchlist item can optionally include `lpMint` (the pool's LP token mint) to enable the LP lock/burn check described below
+
+### On-chain safety pipeline
+
+Set `LIVE_REQUIRE_ONCHAIN_SAFETY=true` to have every live entry pass through `SolanaSafetyProvider` (`src/safety/onChainSafety.js`) before the strategy is allowed to act on it. This replaces trust in a hand-typed `rugScore` with real checks:
+
+- **Mint/freeze authority** – blocks tokens where the mint or freeze authority hasn't been renounced (the deployer could still mint unlimited supply or freeze your holdings). Toggle with `requireMintAuthorityRevoked` / `requireFreezeAuthorityRevoked` in `src/config/risk.js`.
+- **Holder concentration** – uses `getTokenLargestAccounts` to flag tokens where a small number of wallets hold a large share of the largest-holder sample. Threshold: `maxTopHolderPct`.
+- **LP lock/burn** – if a watchlist item provides `lpMint`, checks whether the largest holder of the LP token is a burn address or a known locker program vs. a wallet the deployer could drain from. Threshold: `requireLpLockedOrBurned`.
+- **Honeypot / sell simulation** – fetches a reverse Jupiter quote (token → SOL) before entering; if the sell leg fails, the token is blocked. Toggle: `honeypotSellCheck`.
+
+Results are cached per mint for `SAFETY_CACHE_TTL_MS` to avoid re-querying the RPC/quote API every cycle for tokens already evaluated.
+
+**Limitations, stated plainly:** this raises the bar but isn't a rug-proof guarantee. `getTokenLargestAccounts` only returns the largest holders it tracks (not a full supply census), LP-lock detection only runs when `lpMint` is known (auto-discovered pools usually won't have this yet), and the honeypot check catches simple sell-blocking, not sophisticated delayed traps. Paper mode is unaffected — it keeps using the fast synchronous heuristic checks only.
+
+### Real-time pool/pair discovery
+
+Set `LIVE_POOL_DISCOVERY=true` (with `SOLANA_WS_URL` set) to have the bot watch Raydium and Pump.fun program logs for new pool/token creation in real time, instead of relying only on a hand-maintained `SOLANA_AUTO_WATCHLIST_JSON`:
+
+- `PoolDiscoveryFeed` (`src/market/poolDiscoveryFeed.js`) subscribes to program logs via `logsSubscribe` over websocket, and on a matching creation-instruction log, fetches the full transaction and diffs `preTokenBalances`/`postTokenBalances` to identify newly-appeared mints — this is more robust than decoding instruction accounts by position, which varies across program versions.
+- Discovered tokens are added to a rolling, capped candidate list (`POOL_DISCOVERY_MAX_CANDIDATES`) with a conservative default `rugScore` of `1` (maximum risk) — actual risk is determined later by the on-chain safety pipeline above before any entry is placed.
+- Candidates merge with (and don't replace) any static `SOLANA_AUTO_WATCHLIST_JSON` entries, then get ranked by `SolanaWatchlistFeed` like any other candidate.
+- The websocket client auto-reconnects with exponential backoff if the RPC provider drops the connection.
+
+**Limitations:** the creation-log markers (`initialize2` for Raydium AMM v4, `Instruction: Create` for Pump.fun, etc.) are string matches against human-readable program logs, not a binary instruction decode — if a venue upgrades its program, these may need updating. Discovered candidates also won't have an `lpMint` set automatically, so the LP lock/burn check reports `unknown` for them until that's wired up with a pool-address resolver.
 
 ## Adaptive optimization model
 

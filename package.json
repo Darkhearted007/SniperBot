@@ -29,6 +29,7 @@
   },
   "homepage": "https://github.com/Darkhearted007/SniperBot#readme",
   "dependencies": {
-    "@solana/web3.js": "^2.0.0"
+    "@solana/web3.js": "^2.0.0",
+    "ws": "^8.21.0"
   }
 }

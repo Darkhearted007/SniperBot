@@ -1,5 +1,5 @@
 const { RISK_CONFIG } = require('../config/risk');
-const { runSafetyChecks } = require('../safety/tokenSafety');
+const { runDeepSafetyChecks } = require('../safety/tokenSafety');
 
 function todayUtc() {
   return new Date().toISOString().slice(0, 10);
@@ -15,7 +15,8 @@ class LiveTradingBot {
     goalAgent,
     supervisionMode = false,
     approvalQueue = null,
-    config = RISK_CONFIG
+    config = RISK_CONFIG,
+    safetyProvider = null
   }) {
     this.strategy = strategy;
     this.executor = executor;
@@ -26,6 +27,7 @@ class LiveTradingBot {
     this.supervisionMode = supervisionMode;
     this.approvalQueue = approvalQueue;
     this.config = config;
+    this.safetyProvider = safetyProvider;
     this.state = {
       bankrollSol: 0,
       openPositions: [],
@@ -140,7 +142,11 @@ class LiveTradingBot {
 
   async processOpportunity(opportunity) {
     this.resetDailyIfNeeded();
-    const safety = runSafetyChecks(opportunity, this.config);
+    // Estimate a sell-side probe amount from the opportunity's own quote (if
+    // present) so the honeypot check simulates selling a realistic amount
+    // rather than an arbitrary placeholder.
+    const sellAmountRaw = opportunity.quote?.outAmount ?? null;
+    const safety = await runDeepSafetyChecks(opportunity, this.config, this.safetyProvider, { sellAmountRaw });
     const decision = this.strategy.decide({ state: this.state, opportunity, safety });
 
     if (decision.action === 'ENTER' && decision.sizeSol > 0) {

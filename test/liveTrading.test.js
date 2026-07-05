@@ -71,6 +71,44 @@ test('parseLiveTradingConfig supports automated watchlists and supervised mode',
   assert.equal(config.supervisionMode, true);
 });
 
+test('parseLiveTradingConfig supports pool discovery without a static watchlist', () => {
+  const config = parseLiveTradingConfig({
+    TRADING_MODE: 'live',
+    SOLANA_RPC_URL: 'https://rpc.example',
+    SOLANA_WALLET_SECRET: Buffer.alloc(64, 7).toString('base64'),
+    LIVE_POOL_DISCOVERY: 'true',
+    SOLANA_WS_URL: 'wss://rpc.example',
+    POOL_DISCOVERY_MAX_CANDIDATES: '10',
+    LIVE_REQUIRE_ONCHAIN_SAFETY: 'true',
+    SAFETY_CACHE_TTL_MS: '5000'
+  });
+
+  assert.equal(config.poolDiscoveryEnabled, true);
+  assert.equal(config.wsUrl, 'wss://rpc.example');
+  assert.equal(config.poolDiscoveryMaxCandidates, 10);
+  assert.equal(config.requireOnChainSafety, true);
+  assert.equal(config.safetyCacheTtlMs, 5000);
+  assert.equal(config.watchlist.length, 0);
+  assert.equal(config.watchlistCandidates.length, 0);
+});
+
+test('parseLiveTradingConfig requires SOLANA_WS_URL when pool discovery is enabled', () => {
+  assert.throws(() => parseLiveTradingConfig({
+    TRADING_MODE: 'live',
+    SOLANA_RPC_URL: 'https://rpc.example',
+    SOLANA_WALLET_SECRET: Buffer.alloc(64, 7).toString('base64'),
+    LIVE_POOL_DISCOVERY: 'true'
+  }), /SOLANA_WS_URL is required/);
+});
+
+test('parseLiveTradingConfig still requires a watchlist source without pool discovery', () => {
+  assert.throws(() => parseLiveTradingConfig({
+    TRADING_MODE: 'live',
+    SOLANA_RPC_URL: 'https://rpc.example',
+    SOLANA_WALLET_SECRET: Buffer.alloc(64, 7).toString('base64')
+  }), /SOLANA_WATCHLIST_JSON or SOLANA_AUTO_WATCHLIST_JSON is required/);
+});
+
 test('parseWalletSecretBytes accepts 64-byte base64 and JSON array formats', () => {
   const bytes = Uint8Array.from({ length: 64 }, (_, index) => index);
   const base64 = Buffer.from(bytes).toString('base64');

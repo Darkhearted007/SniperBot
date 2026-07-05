@@ -1,4 +1,11 @@
-const { DEFAULT_JUPITER_QUOTE_API, DEFAULT_JUPITER_SWAP_API, NATIVE_SOL_MINT } = require('./constants');
+const {
+  DEFAULT_JUPITER_QUOTE_API,
+  DEFAULT_JUPITER_SWAP_API,
+  NATIVE_SOL_MINT,
+  RAYDIUM_AMM_V4_PROGRAM_ID,
+  RAYDIUM_CPMM_PROGRAM_ID,
+  PUMP_FUN_PROGRAM_ID
+} = require('./constants');
 
 function parseOptionalNumber(value, fieldName) {
   if (value == null || value === '') return null;
@@ -66,6 +73,7 @@ function normalizeWatchlistItem(item, index) {
     decimals,
     liquidityUsd: Number.isFinite(Number(item.liquidityUsd)) ? Number(item.liquidityUsd) : 0,
     rugScore: Number.isFinite(Number(item.rugScore)) ? Number(item.rugScore) : 1,
+    lpMint: item.lpMint || null,
     baselineMomentumScore: Number.isFinite(Number(item.baselineMomentumScore))
       ? Number(item.baselineMomentumScore)
       : 0.65,
@@ -100,9 +108,29 @@ function parseLiveTradingConfig(env = process.env) {
     env.SOLANA_AUTO_WATCHLIST_JSON,
     'SOLANA_AUTO_WATCHLIST_JSON'
   ).map(normalizeWatchlistItem);
-  if (watchlist.length === 0 && watchlistCandidates.length === 0) {
-    throw new Error('SOLANA_WATCHLIST_JSON or SOLANA_AUTO_WATCHLIST_JSON is required in live mode');
+
+  const poolDiscoveryEnabled = parseBoolean(env.LIVE_POOL_DISCOVERY);
+  const wsUrl = env.SOLANA_WS_URL || null;
+  if (poolDiscoveryEnabled && !wsUrl) {
+    throw new Error('SOLANA_WS_URL is required when LIVE_POOL_DISCOVERY is enabled');
   }
+  const poolDiscoveryProgramIds = env.POOL_DISCOVERY_PROGRAMS
+    ? String(env.POOL_DISCOVERY_PROGRAMS).split(',').map((id) => id.trim()).filter(Boolean)
+    : [RAYDIUM_AMM_V4_PROGRAM_ID, RAYDIUM_CPMM_PROGRAM_ID, PUMP_FUN_PROGRAM_ID];
+  const poolDiscoveryMaxCandidates = parseOptionalNumber(
+    env.POOL_DISCOVERY_MAX_CANDIDATES,
+    'POOL_DISCOVERY_MAX_CANDIDATES'
+  ) ?? 25;
+
+  if (watchlist.length === 0 && watchlistCandidates.length === 0 && !poolDiscoveryEnabled) {
+    throw new Error(
+      'SOLANA_WATCHLIST_JSON or SOLANA_AUTO_WATCHLIST_JSON is required in live mode ' +
+      '(or enable LIVE_POOL_DISCOVERY to discover candidates automatically)'
+    );
+  }
+
+  const requireOnChainSafety = parseBoolean(env.LIVE_REQUIRE_ONCHAIN_SAFETY);
+  const safetyCacheTtlMs = parseOptionalNumber(env.SAFETY_CACHE_TTL_MS, 'SAFETY_CACHE_TTL_MS') ?? 60_000;
 
   const slippageBps = parseOptionalNumber(env.LIVE_SLIPPAGE_BPS, 'LIVE_SLIPPAGE_BPS') ?? 100;
   const pollIntervalMs = parseOptionalNumber(env.LIVE_POLL_INTERVAL_MS, 'LIVE_POLL_INTERVAL_MS') ?? 15_000;
@@ -114,7 +142,7 @@ function parseLiveTradingConfig(env = process.env) {
   }
   const autoWatchlistSize = watchlistCandidates.length > 0
     ? Math.min(autoWatchlistSizeRaw ?? watchlistCandidates.length, watchlistCandidates.length)
-    : null;
+    : (poolDiscoveryEnabled ? (autoWatchlistSizeRaw ?? poolDiscoveryMaxCandidates) : null);
   const supervisionMode = parseBoolean(env.LIVE_REQUIRE_SUPERVISION ?? env.LIVE_SUPERVISION_MODE);
 
   return {
@@ -130,7 +158,13 @@ function parseLiveTradingConfig(env = process.env) {
     pollIntervalMs,
     minSolReserve,
     maxBankrollSol,
-    supervisionMode
+    supervisionMode,
+    poolDiscoveryEnabled,
+    wsUrl,
+    poolDiscoveryProgramIds,
+    poolDiscoveryMaxCandidates,
+    requireOnChainSafety,
+    safetyCacheTtlMs
   };
 }
 

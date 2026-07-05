@@ -19,6 +19,14 @@ const RISK_CONFIG = {
   blockedTokenKeywords: ['honeypot', 'blacklist', 'tax-100', 'rug'],
   supportedVenues: ['solana/raydium', 'solana/pump.fun', 'bsc/pancakeswap'],
 
+  // On-chain safety checks (live mode only; require a SolanaSafetyProvider)
+  requireMintAuthorityRevoked: true,
+  requireFreezeAuthorityRevoked: true,
+  requireLpLockedOrBurned: true,
+  honeypotSellCheck: true,
+  maxTopHolderPct: 0.5,
+  safetyCacheTtlMs: 60_000,
+
   // Entry edge requirement
   minExpectedEdge: 0.25,
   minRiskAdjustedScore: 0.18,
