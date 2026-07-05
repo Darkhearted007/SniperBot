@@ -252,6 +252,10 @@
       <input id="inp-url" type="url" placeholder="http://localhost:3000" autocomplete="off" spellcheck="false">
       <p class="hint" aria-label="Example URLs: http://192.168.1.x:3000 locally, or https://your-app.up.railway.app on Railway">e.g. <code>http://192.168.1.x:3000</code> locally, or <code>https://your-app.up.railway.app</code> on Railway</p>
     </div>
+    <div class="field">
+      <label>Secret Key <span style="font-weight:400;color:var(--muted)">(optional — set <code>DASHBOARD_SECRET_KEY</code> on the server)</span></label>
+      <input id="inp-key" type="password" placeholder="Leave blank to use wallet sign-in" autocomplete="off" spellcheck="false">
+    </div>
     <div id="modal-error" class="banner error hidden" style="margin-bottom:12px"></div>
     <div class="modal-actions">
       <button id="btn-cancel" class="danger">Cancel</button>
@@ -364,6 +368,7 @@
 
   /* ── State ── */
   let serverUrl = '';
+  let secretKey = '';
   let sessionToken = '';
   let refreshTimer = null;
   let lastFetchAt = null;
@@ -376,6 +381,7 @@
   const btnCancel = $('btn-cancel');
   const btnRefresh = $('btn-refresh');
   const inpUrl    = $('inp-url');
+  const inpKey    = $('inp-key');
   const modalErr  = $('modal-error');
   const errBanner = $('error-banner');
   const statusDot = $('status-dot');
@@ -409,12 +415,16 @@
   /* ── Settings ── */
   function loadSettings() {
     serverUrl = localStorage.getItem(KEY_URL) || '';
+    // Secret key is never persisted — users must re-enter it each session for security.
+    secretKey = '';
     sessionToken = sessionStorage.getItem(KEY_SESSION) || '';
   }
   function saveSettings() {
     const prevUrl = serverUrl;
     serverUrl = inpUrl.value.trim().replace(/\/$/, '');
+    secretKey = inpKey.value.trim();
     localStorage.setItem(KEY_URL, serverUrl);
+    // Secret key is intentionally NOT stored in any Web Storage API.
     if (prevUrl && serverUrl !== prevUrl) {
       // Server URL changed; invalidate any session from the old server
       clearWalletSession();
@@ -424,14 +434,28 @@
     sessionToken = '';
     sessionStorage.removeItem(KEY_SESSION);
   }
+  function isRailwayConsoleUrl(url) {
+    return /^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(url);
+  }
+  function isVercelFrontendUrl(url) {
+    return /^https?:\/\/[^/]+\.vercel\.app\b/i.test(url);
+  }
   function openModal() {
     inpUrl.value = serverUrl || window.location.origin;
+    inpKey.value = secretKey || '';
     modalErr.classList.add('hidden');
     // If the saved URL is a Railway project management URL, warn the user immediately.
-    if (/^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(serverUrl)) {
+    if (isRailwayConsoleUrl(serverUrl)) {
       modalErr.textContent =
         'The saved URL is a Railway project management URL, not your deployed service URL. ' +
         'Enter the public domain assigned to your service, e.g. https://your-app.up.railway.app';
+      modalErr.classList.remove('hidden');
+    }
+    // If the saved URL is a Vercel frontend URL, warn the user immediately.
+    if (isVercelFrontendUrl(serverUrl)) {
+      modalErr.textContent =
+        'The saved URL is a Vercel frontend URL, not a running bot backend. ' +
+        'Enter the URL where your SniperBot backend is running, e.g. https://your-app.up.railway.app';
       modalErr.classList.remove('hidden');
     }
     modal.classList.remove('hidden');
@@ -465,9 +489,19 @@
     }
 
     const challengeRes = await fetch(serverUrl + '/auth/challenge?wallet=' + encodeURIComponent(walletAddress));
-    const challengeBody = await challengeRes.json().catch(() => ({}));
+    const challengeBodyText = await challengeRes.text().catch(() => '');
+    let challengeBody = {};
+    try { challengeBody = JSON.parse(challengeBodyText); } catch (_) {}
     if (!challengeRes.ok) {
-      throw new Error(challengeBody.error || 'Failed to create wallet challenge');
+      const contentType = challengeRes.headers.get('content-type') || '';
+      const isHtml = contentType.includes('text/html') ||
+                     /^<!DOCTYPE\b|^<html\b/i.test(challengeBodyText.trim());
+      throw new Error(
+        challengeBody.error ||
+        (isHtml
+          ? 'Server returned an unexpected HTML response — make sure the Server URL points to your running SniperBot backend, not the Vercel frontend'
+          : 'Failed to create wallet challenge')
+      );
     }
 
     const messageBytes = new TextEncoder().encode(challengeBody.message);
@@ -492,10 +526,14 @@
   }
 
   /* ── Fetch ── */
-  async function fetchSummary() {
+  function authHeaders() {
     const headers = {};
-    if (sessionToken) headers.authorization = 'Bearer ' + sessionToken;
-    const res = await fetch(serverUrl + '/summary', { headers });
+    if (secretKey) headers['x-secret-key'] = secretKey;
+    else if (sessionToken) headers.authorization = 'Bearer ' + sessionToken;
+    return headers;
+  }
+  async function fetchSummary() {
+    const res = await fetch(serverUrl + '/summary', { headers: authHeaders() });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error || 'HTTP ' + res.status);
@@ -621,11 +659,21 @@
   async function refresh() {
     if (!serverUrl) { setStatus('', 'Not configured'); return; }
     // Guard: Railway project management URLs are the web console, not the deployed service.
-    if (/^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(serverUrl)) {
+    if (isRailwayConsoleUrl(serverUrl)) {
       setStatus('error', 'Wrong URL');
       setError(
         'That looks like a Railway project management URL, not your deployed service URL. ' +
         'Click ⚙ Settings and enter the public domain assigned to your service, ' +
+        'e.g. https://your-app.up.railway.app'
+      );
+      return;
+    }
+    // Guard: Vercel frontend URLs host only the dashboard UI, not the bot backend.
+    if (isVercelFrontendUrl(serverUrl)) {
+      setStatus('error', 'Wrong URL');
+      setError(
+        'That looks like a Vercel frontend URL, not a running bot backend. ' +
+        'Click ⚙ Settings and enter the URL where your SniperBot backend is running, ' +
         'e.g. https://your-app.up.railway.app'
       );
       return;
@@ -639,7 +687,7 @@
       setError(null);
       lastUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
     } catch (e) {
-      if (/Unauthorized/i.test(e.message)) {
+      if (/Unauthorized/i.test(e.message) && !secretKey) {
         const hadSessionToken = Boolean(sessionToken);
         clearWalletSession();
         clearInterval(refreshTimer);
@@ -669,17 +717,34 @@
     if (!serverUrl) { modalErr.textContent = 'Server URL is required.'; modalErr.classList.remove('hidden'); return; }
     // Detect Railway project management URLs (railway.com/project/…) — these are the
     // Railway web console URLs, not the deployed service URL.
-    if (/^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(serverUrl)) {
+    if (isRailwayConsoleUrl(serverUrl)) {
       modalErr.textContent =
         'That looks like a Railway project management URL, not your deployed service URL. ' +
         'Use the public domain assigned to your service, e.g. https://your-app.up.railway.app';
       modalErr.classList.remove('hidden');
       return;
     }
-    btnSave.textContent = 'Connecting wallet…';
+    // Detect Vercel frontend URLs (*.vercel.app) — these host the dashboard UI only, not the bot backend.
+    if (isVercelFrontendUrl(serverUrl)) {
+      modalErr.textContent =
+        'That looks like a Vercel frontend URL, not a running bot backend. ' +
+        'Enter the URL where your SniperBot backend is running, e.g. https://your-app.up.railway.app';
+      modalErr.classList.remove('hidden');
+      return;
+    }
+    // Warn when a secret key is used over plain HTTP (not localhost) — credentials would be sent unencrypted.
+    if (secretKey && /^http:\/\//i.test(serverUrl) && !/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?=[:/]|$)/i.test(serverUrl)) {
+      modalErr.textContent =
+        '⚠ You are sending a secret key over an unencrypted HTTP connection. ' +
+        'Use HTTPS for remote servers to keep your credentials safe.';
+      modalErr.classList.remove('hidden');
+      // This is a warning, not a blocker — allow the user to proceed anyway.
+    }
+    btnSave.textContent = secretKey ? 'Connecting…' : 'Connecting wallet…';
     btnSave.disabled = true;
     try {
-      if (!sessionToken) {
+      // If a secret key is set use it directly; otherwise fall back to wallet sign-in.
+      if (!secretKey && !sessionToken) {
         await connectWalletSession();
       }
       await fetchSummary();
@@ -696,7 +761,7 @@
 
   /* ── Boot ── */
   loadSettings();
-  if (serverUrl && sessionToken) startAutoRefresh();
+  if (serverUrl && (secretKey || sessionToken)) startAutoRefresh();
   else openModal();
 </script>
 </body>
