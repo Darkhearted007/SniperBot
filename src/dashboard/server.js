@@ -83,6 +83,7 @@ function readJsonBody(req) {
 }
 
 function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
+  const secretKey = String(process.env.DASHBOARD_SECRET_KEY || '').trim();
   const allowedWallets = new Set(
     String(process.env.DASHBOARD_ALLOWED_WALLETS || '')
       .split(',')
@@ -177,8 +178,15 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
   }
 
   function auth(req) {
-    pruneExpiredEntries();
+    // Secret-key auth: fastest path — no session lookup needed.
+    if (secretKey) {
+      const headerKey = String(req.headers['x-secret-key'] || '').trim();
+      if (headerKey && crypto.timingSafeEqual(Buffer.from(headerKey), Buffer.from(secretKey))) {
+        return true;
+      }
+    }
 
+    pruneExpiredEntries();
     const sessionToken = getSessionToken(req);
     if (sessionToken) {
       const session = authSessions.get(sessionToken);
@@ -307,9 +315,16 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
       return;
     }
 
+    // Public liveness probe — used by Railway / load-balancers (no auth required).
+    if (req.method === 'GET' && pathname === '/ping') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
     if (!auth(req)) {
       res.writeHead(401, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Unauthorized: connect a Solana wallet to sign in' }));
+      res.end(JSON.stringify({ error: 'Unauthorized: connect a Solana wallet to sign in, or set DASHBOARD_SECRET_KEY and pass x-secret-key header' }));
       return;
     }
 

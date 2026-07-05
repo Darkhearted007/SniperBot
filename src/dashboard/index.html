@@ -252,6 +252,10 @@
       <input id="inp-url" type="url" placeholder="http://localhost:3000" autocomplete="off" spellcheck="false">
       <p class="hint" aria-label="Example URLs: http://192.168.1.x:3000 locally, or https://your-app.up.railway.app on Railway">e.g. <code>http://192.168.1.x:3000</code> locally, or <code>https://your-app.up.railway.app</code> on Railway</p>
     </div>
+    <div class="field">
+      <label>Secret Key <span style="font-weight:400;color:var(--muted)">(optional — set <code>DASHBOARD_SECRET_KEY</code> on the server)</span></label>
+      <input id="inp-key" type="password" placeholder="Leave blank to use wallet sign-in" autocomplete="off" spellcheck="false">
+    </div>
     <div id="modal-error" class="banner error hidden" style="margin-bottom:12px"></div>
     <div class="modal-actions">
       <button id="btn-cancel" class="danger">Cancel</button>
@@ -360,10 +364,12 @@
 <script>
   /* ── Storage keys ── */
   const KEY_URL = 'sb_server_url';
+  const KEY_SECRET = 'sb_secret_key';
   const KEY_SESSION = 'sb_wallet_session';
 
   /* ── State ── */
   let serverUrl = '';
+  let secretKey = '';
   let sessionToken = '';
   let refreshTimer = null;
   let lastFetchAt = null;
@@ -376,6 +382,7 @@
   const btnCancel = $('btn-cancel');
   const btnRefresh = $('btn-refresh');
   const inpUrl    = $('inp-url');
+  const inpKey    = $('inp-key');
   const modalErr  = $('modal-error');
   const errBanner = $('error-banner');
   const statusDot = $('status-dot');
@@ -409,12 +416,19 @@
   /* ── Settings ── */
   function loadSettings() {
     serverUrl = localStorage.getItem(KEY_URL) || '';
+    secretKey = localStorage.getItem(KEY_SECRET) || '';
     sessionToken = sessionStorage.getItem(KEY_SESSION) || '';
   }
   function saveSettings() {
     const prevUrl = serverUrl;
     serverUrl = inpUrl.value.trim().replace(/\/$/, '');
+    secretKey = inpKey.value.trim();
     localStorage.setItem(KEY_URL, serverUrl);
+    if (secretKey) {
+      localStorage.setItem(KEY_SECRET, secretKey);
+    } else {
+      localStorage.removeItem(KEY_SECRET);
+    }
     if (prevUrl && serverUrl !== prevUrl) {
       // Server URL changed; invalidate any session from the old server
       clearWalletSession();
@@ -432,6 +446,7 @@
   }
   function openModal() {
     inpUrl.value = serverUrl || window.location.origin;
+    inpKey.value = secretKey || '';
     modalErr.classList.add('hidden');
     // If the saved URL is a Railway project management URL, warn the user immediately.
     if (isRailwayConsoleUrl(serverUrl)) {
@@ -514,10 +529,14 @@
   }
 
   /* ── Fetch ── */
-  async function fetchSummary() {
+  function authHeaders() {
     const headers = {};
-    if (sessionToken) headers.authorization = 'Bearer ' + sessionToken;
-    const res = await fetch(serverUrl + '/summary', { headers });
+    if (secretKey) headers['x-secret-key'] = secretKey;
+    else if (sessionToken) headers.authorization = 'Bearer ' + sessionToken;
+    return headers;
+  }
+  async function fetchSummary() {
+    const res = await fetch(serverUrl + '/summary', { headers: authHeaders() });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error || 'HTTP ' + res.status);
@@ -671,7 +690,7 @@
       setError(null);
       lastUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
     } catch (e) {
-      if (/Unauthorized/i.test(e.message)) {
+      if (/Unauthorized/i.test(e.message) && !secretKey) {
         const hadSessionToken = Boolean(sessionToken);
         clearWalletSession();
         clearInterval(refreshTimer);
@@ -716,10 +735,11 @@
       modalErr.classList.remove('hidden');
       return;
     }
-    btnSave.textContent = 'Connecting wallet…';
+    btnSave.textContent = secretKey ? 'Connecting…' : 'Connecting wallet…';
     btnSave.disabled = true;
     try {
-      if (!sessionToken) {
+      // If a secret key is set use it directly; otherwise fall back to wallet sign-in.
+      if (!secretKey && !sessionToken) {
         await connectWalletSession();
       }
       await fetchSummary();
@@ -736,7 +756,7 @@
 
   /* ── Boot ── */
   loadSettings();
-  if (serverUrl && sessionToken) startAutoRefresh();
+  if (serverUrl && (secretKey || sessionToken)) startAutoRefresh();
   else openModal();
 </script>
 </body>
