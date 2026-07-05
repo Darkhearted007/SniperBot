@@ -733,7 +733,7 @@
       return;
     }
     // Warn when a secret key is used over plain HTTP (not localhost) — credentials would be sent unencrypted.
-    if (secretKey && /^http:\/\//i.test(serverUrl) && !/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])\b/i.test(serverUrl)) {
+    if (secretKey && /^http:\/\//i.test(serverUrl) && !/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?=[:/]|$)/i.test(serverUrl)) {
       modalErr.textContent =
         '⚠ You are sending a secret key over an unencrypted HTTP connection. ' +
         'Use HTTPS for remote servers to keep your credentials safe.';
