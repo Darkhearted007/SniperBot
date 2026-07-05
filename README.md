@@ -205,6 +205,19 @@ https://vercel.com/new/clone?repository-url=https://github.com/Darkhearted007/Sn
 
 Vercel will clone the repo, run `npm run build` (which copies `src/dashboard/index.html` → `public/index.html`), and publish the result.
 
+### GitHub Actions deploys (preview + production)
+
+This repository includes a dedicated workflow at `.github/workflows/vercel-deploy.yml`:
+
+- Pull requests to `main` trigger a **preview** deployment
+- Pushes to `main` (and manual dispatch) trigger a **production** deployment
+
+Configure these repository secrets before using the workflow:
+
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+
 ### Manual deploy via CLI
 
 ```bash
