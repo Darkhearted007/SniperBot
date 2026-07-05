@@ -441,7 +441,10 @@
     return /^https?:\/\/[^/]+\.vercel\.app\b/i.test(url);
   }
   function openModal() {
-    inpUrl.value = serverUrl || window.location.origin;
+    // Only pre-fill with origin when it is not a Vercel frontend — on Vercel the
+    // user must supply their Railway (or other) backend URL manually.
+    const originDefault = isVercelFrontendUrl(window.location.origin) ? '' : window.location.origin;
+    inpUrl.value = serverUrl || originDefault;
     inpKey.value = secretKey || '';
     modalErr.classList.add('hidden');
     // If the saved URL is a Railway project management URL, warn the user immediately.
@@ -455,6 +458,12 @@
     if (isVercelFrontendUrl(serverUrl)) {
       modalErr.textContent =
         'The saved URL is a Vercel frontend URL, not a running bot backend. ' +
+        'Enter the URL where your SniperBot backend is running, e.g. https://your-app.up.railway.app';
+      modalErr.classList.remove('hidden');
+    }
+    // When hosted on Vercel with no saved URL configured, guide the user.
+    if (!serverUrl && isVercelFrontendUrl(window.location.origin)) {
+      modalErr.textContent =
         'Enter the URL where your SniperBot backend is running, e.g. https://your-app.up.railway.app';
       modalErr.classList.remove('hidden');
     }
@@ -747,7 +756,18 @@
       if (!secretKey && !sessionToken) {
         await connectWalletSession();
       }
-      await fetchSummary();
+      try {
+        await fetchSummary();
+      } catch (fetchErr) {
+        // If the stored session token has expired, clear it and try a fresh wallet sign-in.
+        if (/Unauthorized/i.test(fetchErr.message) && !secretKey) {
+          clearWalletSession();
+          await connectWalletSession();
+          await fetchSummary();
+        } else {
+          throw fetchErr;
+        }
+      }
       closeModal();
       startAutoRefresh();
     } catch (e) {
