@@ -2,6 +2,9 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+// Scales small drift values (~0.01-0.03) into a 0-1 regime-strength feature.
+const REGIME_STRENGTH_SCALE = 20;
+
 function createOpportunityFeed() {
   const seed = [
     {
@@ -106,7 +109,7 @@ function createOpportunityFeed() {
           marketContext: {
             trendState,
             volatilityRegime,
-            regimeStrength: clamp(Math.abs(trendShift) * 20, 0.1, 1)
+            regimeStrength: clamp(Math.abs(trendShift) * REGIME_STRENGTH_SCALE, 0.1, 1)
           }
         };
       });

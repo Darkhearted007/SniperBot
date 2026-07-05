@@ -22,6 +22,7 @@ class PatternAgent {
       const liq = r.position?.liquidityUsd || 0;
       const momentum = r.position?.momentumScore || 0;
       const isWin = r.execution?.pnlPct > 0;
+      // Keep backward compatibility for older logs that stored trendState at the top level.
       const trendState = r.position?.marketContext?.trendState || r.position?.trendState || null;
 
       // venue stats

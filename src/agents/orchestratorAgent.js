@@ -9,6 +9,16 @@ const { PaperTradingSimulator } = require('../simulator/paperTradingSimulator');
 const { equityOf } = require('../simulator/multiStrategySimulator');
 const { RISK_CONFIG } = require('../config/risk');
 
+// Adaptive tuning constants intentionally conservative to avoid unstable threshold jumps per cycle.
+const MOMENTUM_FLOOR_MULTIPLIER = 0.8;
+const GROWTH_POSITION_SCALE = 1.25;
+const GROWTH_POSITION_CAP = 0.3;
+const GROWTH_EDGE_FLOOR = 0.12;
+const GROWTH_EDGE_MULTIPLIER = 0.85;
+const DEFENSIVE_POSITION_FLOOR = 0.05;
+const DEFENSIVE_POSITION_MULTIPLIER = 0.7;
+const DEFENSIVE_EDGE_MULTIPLIER = 1.2;
+
 /**
  * OrchestratorAgent coordinates all sub-agents to pursue the hardcoded goal of
  * growing 0.1 SOL → 2 SOL within 24 hours.
@@ -138,7 +148,7 @@ class OrchestratorAgent {
     const bestConfig = this.variantAgent.getBestVariantConfig();
     if (bestConfig.name !== this.activeVariantName) {
       this.activeVariantName = bestConfig.name || this.activeVariantName;
-      // Replace the strategy config in-place (learning history is intentionally preserved)
+      // Keep adaptive overrides dominant so pattern/regime feedback remains sticky between variant swaps.
       this.adaptiveConfig = { ...bestConfig, ...this.adaptiveConfig };
     }
     this._syncAdaptiveConfig();
@@ -224,30 +234,43 @@ class OrchestratorAgent {
 
   _applyPatternFeedback(patterns) {
     const nextConfig = { ...this.adaptiveConfig };
+    const baseMinMomentum = this.config.minMomentumScore ?? RISK_CONFIG.minMomentumScore;
+    const baseMaxPosition = this.config.maxPositionPct ?? RISK_CONFIG.maxPositionPct;
+    const baseExpectedEdge = this.config.minExpectedEdge ?? RISK_CONFIG.minExpectedEdge;
     if (Number.isFinite(patterns.recommendedMinMomentum)) {
-      nextConfig.minMomentumScore = Math.max(this.config.minMomentumScore * 0.8, patterns.recommendedMinMomentum);
+      nextConfig.minMomentumScore = Math.max(
+        baseMinMomentum * MOMENTUM_FLOOR_MULTIPLIER,
+        patterns.recommendedMinMomentum
+      );
     }
     if (Number.isFinite(patterns.recommendedMinLiquidity)) {
       nextConfig.minLiquidityUsd = Math.max(10000, patterns.recommendedMinLiquidity);
     }
 
     if (patterns.recommendedRiskMode === 'growth') {
-      nextConfig.maxPositionPct = Math.min(this.config.maxPositionPct * 1.25, 0.3);
-      nextConfig.minExpectedEdge = Math.max(0.12, this.config.minExpectedEdge * 0.85);
+      nextConfig.maxPositionPct = Math.min(baseMaxPosition * GROWTH_POSITION_SCALE, GROWTH_POSITION_CAP);
+      nextConfig.minExpectedEdge = Math.max(GROWTH_EDGE_FLOOR, baseExpectedEdge * GROWTH_EDGE_MULTIPLIER);
     } else if (patterns.recommendedRiskMode === 'defensive') {
-      nextConfig.maxPositionPct = Math.max(0.05, this.config.maxPositionPct * 0.7);
-      nextConfig.minExpectedEdge = this.config.minExpectedEdge * 1.2;
+      nextConfig.maxPositionPct = Math.max(
+        DEFENSIVE_POSITION_FLOOR,
+        baseMaxPosition * DEFENSIVE_POSITION_MULTIPLIER
+      );
+      nextConfig.minExpectedEdge = baseExpectedEdge * DEFENSIVE_EDGE_MULTIPLIER;
     } else {
-      nextConfig.maxPositionPct = this.config.maxPositionPct;
-      nextConfig.minExpectedEdge = this.config.minExpectedEdge;
+      nextConfig.maxPositionPct = baseMaxPosition;
+      nextConfig.minExpectedEdge = baseExpectedEdge;
     }
     this.adaptiveConfig = nextConfig;
   }
 
   _detectRegime(opportunities = []) {
     if (!Array.isArray(opportunities) || opportunities.length === 0) return 'chop';
-    const avgMomentum = opportunities.reduce((sum, item) => sum + (item.momentumScore || 0), 0) / opportunities.length;
-    const avgVolatility = opportunities.reduce((sum, item) => sum + (item.volatilityRisk || 0), 0) / opportunities.length;
+    const totals = opportunities.reduce((acc, item) => ({
+      momentum: acc.momentum + (item.momentumScore || 0),
+      volatility: acc.volatility + (item.volatilityRisk || 0)
+    }), { momentum: 0, volatility: 0 });
+    const avgMomentum = totals.momentum / opportunities.length;
+    const avgVolatility = totals.volatility / opportunities.length;
     if (avgMomentum > 0.72 && avgVolatility < 0.4) return 'bull';
     if (avgMomentum < 0.45 || avgVolatility > 0.62) return 'bear';
     return 'chop';

@@ -111,6 +111,7 @@ npm start
 - `LIVE_REQUIRE_SUPERVISION` – require manual approval before live entries and exits are executed
 - `LIVE_SLIPPAGE_BPS` – default `100`
 - `BOT_STATE_FILE` – optional JSON snapshot path for persisted learning/trade state across restarts
+- `BOT_STATE_PERSIST_EVERY_CYCLES` – snapshot cadence for live loops, default `10`
 - `DASHBOARD_ALLOWED_WALLETS` – comma-separated Solana wallet addresses allowed to sign in to the dashboard
 - `DASHBOARD_CHALLENGE_TTL_MS` – wallet sign-in challenge lifetime, default `300000`
 - `DASHBOARD_SESSION_TTL_MS` – wallet session lifetime, default `43200000`

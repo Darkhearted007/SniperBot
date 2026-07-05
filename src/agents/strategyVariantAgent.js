@@ -1,6 +1,8 @@
 const { STRATEGY_VARIANTS, RISK_CONFIG } = require('../config/risk');
 const { createIsolatedSimulator, equityOf } = require('../simulator/multiStrategySimulator');
 
+const MIN_STDEV_EPSILON = 1e-4;
+
 /**
  * StrategyVariantAgent manages N isolated simulators — one per strategy variant
  * (conservative / balanced / aggressive).  Every call to `runCycle` advances all
@@ -131,7 +133,7 @@ class StrategyVariantAgent {
     const mean = returns.reduce((sum, value) => sum + value, 0) / returns.length;
     const variance = returns.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / returns.length;
     const stdev = Math.sqrt(variance);
-    const sharpeLike = mean / Math.max(stdev, 1e-4);
+    const sharpeLike = mean / Math.max(stdev, MIN_STDEV_EPSILON);
     return Math.max(0, Math.min(1.5, 0.5 + sharpeLike * 0.2));
   }
 

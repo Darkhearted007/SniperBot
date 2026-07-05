@@ -26,6 +26,7 @@ class StrategyEngine {
     const qualityMultiplier = this._executionQualityMultiplier(opportunity, cfg);
     const regimeMultiplier = this._regimeMultiplier(opportunity, cfg);
     const drawdownPenalty = 1 - Math.min(0.5, (state.drawdownPct || 0) * 1.5);
+    // Multipliers are bounded so confidence remains in a controlled range before clamping to [0.01, 0.99].
     const confidence = Math.max(0.01, Math.min(0.99, baseConfidence * qualityMultiplier * regimeMultiplier * drawdownPenalty));
     const expectedEdge = opportunity.momentumScore * confidence - opportunity.volatilityRisk;
     const hitRateProxy = Math.max(0.05, Math.min(0.95, baseConfidence * qualityMultiplier));
@@ -52,13 +53,16 @@ class StrategyEngine {
   }
 
   _executionQualityMultiplier(opportunity, cfg) {
-    const slippagePenalty = opportunity.expectedSlippageBps != null
+    const hasSlippageSignal = opportunity.expectedSlippageBps !== null && opportunity.expectedSlippageBps !== undefined;
+    const hasDepthSignal = opportunity.depthScore !== null && opportunity.depthScore !== undefined;
+    const hasFailureSignal = opportunity.executionFailureRate !== null && opportunity.executionFailureRate !== undefined;
+    const slippagePenalty = hasSlippageSignal
       ? Math.max(0.45, 1 - (opportunity.expectedSlippageBps / (cfg.maxExpectedSlippageBps * 2)))
       : 1;
-    const depthPenalty = opportunity.depthScore != null
+    const depthPenalty = hasDepthSignal
       ? Math.max(0.45, Math.min(1.2, opportunity.depthScore + 0.2))
       : 1;
-    const failRatePenalty = opportunity.executionFailureRate != null
+    const failRatePenalty = hasFailureSignal
       ? Math.max(0.35, 1 - opportunity.executionFailureRate * 2.2)
       : 1;
     return slippagePenalty * depthPenalty * failRatePenalty;
@@ -73,13 +77,21 @@ class StrategyEngine {
   }
 
   _violatesExecutionQuality(opportunity, cfg) {
-    if (opportunity.expectedSlippageBps != null && opportunity.expectedSlippageBps > cfg.maxExpectedSlippageBps) {
+    if (
+      opportunity.expectedSlippageBps !== null &&
+      opportunity.expectedSlippageBps !== undefined &&
+      opportunity.expectedSlippageBps > cfg.maxExpectedSlippageBps
+    ) {
       return true;
     }
-    if (opportunity.depthScore != null && opportunity.depthScore < cfg.minDepthScore) {
+    if (opportunity.depthScore !== null && opportunity.depthScore !== undefined && opportunity.depthScore < cfg.minDepthScore) {
       return true;
     }
-    if (opportunity.executionFailureRate != null && opportunity.executionFailureRate > cfg.maxExecutionFailureRate) {
+    if (
+      opportunity.executionFailureRate !== null &&
+      opportunity.executionFailureRate !== undefined &&
+      opportunity.executionFailureRate > cfg.maxExecutionFailureRate
+    ) {
       return true;
     }
     return false;
@@ -101,7 +113,10 @@ class StrategyEngine {
     if (categoryExposure >= cfg.maxTokenCategoryExposurePct) {
       return true;
     }
-    const correlatedPrefix = String(opportunity.pair || '').split('/')[0];
+    const correlatedPrefix = (opportunity.pair || '').split('/')[0];
+    if (!correlatedPrefix) {
+      return false;
+    }
     const correlatedExposure = state.openPositions
       .filter((position) => String(position.pair || '').startsWith(`${correlatedPrefix}/`))
       .reduce((sum, position) => sum + position.capitalSol, 0) / baseline;

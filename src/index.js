@@ -135,10 +135,12 @@ const MAX_LIVE_BACKOFF_MS = 60 * 1000;
 const MAX_PAPER_BACKOFF_MS = 5 * 1000;
 const DEFAULT_PAPER_BASE_DELAY_MS = 50;
 const PAPER_PROGRESS_LOG_INTERVAL = 50;
+const DEFAULT_STATE_PERSIST_EVERY = 10;
 
 async function runMain(env = process.env, runtime = process) {
   const mode = getTradingMode(env);
   const port = Number(env.PORT || 3000);
+  const statePersistEvery = Math.max(1, Number(env.BOT_STATE_PERSIST_EVERY_CYCLES || DEFAULT_STATE_PERSIST_EVERY));
   const shutdown = {
     requested: false,
     reason: null
@@ -198,7 +200,7 @@ async function runMain(env = process.env, runtime = process) {
           const result = await bot.runCycle();
           consecutiveCycleFailures = 0;
           persistDebounceCounter += 1;
-          if (persistDebounceCounter % 10 === 0) {
+          if (persistDebounceCounter % statePersistEvery === 0) {
             await saveState(env.BOT_STATE_FILE, { live: bot.snapshot() });
           }
           logEvent('info', 'live-cycle-complete', {
@@ -255,7 +257,7 @@ async function runMain(env = process.env, runtime = process) {
         const result = orchestrator.runCycle();
         cycleCounter += 1;
         consecutiveCycleFailures = 0;
-        if (cycleCounter % PAPER_PROGRESS_LOG_INTERVAL === 0) {
+        if (cycleCounter % statePersistEvery === 0) {
           await saveState(env.BOT_STATE_FILE, { orchestrator: orchestrator.snapshot() });
         }
 

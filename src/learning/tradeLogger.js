@@ -18,7 +18,7 @@ class TradeLogger {
   }
 
   snapshot(maxRecords = null) {
-    if (!Number.isFinite(maxRecords) || maxRecords == null || maxRecords < 1) {
+    if (!Number.isFinite(maxRecords) || maxRecords < 1) {
       return [...this.records];
     }
     return this.records.slice(-Math.floor(maxRecords));
