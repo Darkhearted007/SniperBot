@@ -241,6 +241,27 @@ class LiveTradingBot {
       pendingDecisions: this.getPendingDecisions().length
     };
   }
+
+  snapshot() {
+    return {
+      state: this.state,
+      learning: typeof this.learning.snapshot === 'function' ? this.learning.snapshot() : null,
+      log: typeof this.logger.snapshot === 'function' ? this.logger.snapshot(1000) : []
+    };
+  }
+
+  restore(snapshot = {}) {
+    if (!snapshot || typeof snapshot !== 'object') return;
+    if (snapshot.state && typeof snapshot.state === 'object') {
+      this.state = { ...this.state, ...snapshot.state };
+    }
+    if (snapshot.learning && typeof this.learning.restore === 'function') {
+      this.learning.restore(snapshot.learning);
+    }
+    if (Array.isArray(snapshot.log) && typeof this.logger.restore === 'function') {
+      this.logger.restore(snapshot.log);
+    }
+  }
 }
 
 module.exports = { LiveTradingBot };

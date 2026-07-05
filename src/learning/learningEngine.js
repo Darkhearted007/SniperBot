@@ -60,6 +60,33 @@ class LearningEngine {
       ? execution.pnlPct
       : (1 - alpha) * vs.avgPnlPct + alpha * execution.pnlPct;
   }
+
+  snapshot() {
+    return {
+      stats: { ...this.stats },
+      venueStats: { ...this.venueStats }
+    };
+  }
+
+  restore(snapshot = {}) {
+    if (snapshot.stats && typeof snapshot.stats === 'object') {
+      this.stats = {
+        wins: Number(snapshot.stats.wins) || 0,
+        losses: Number(snapshot.stats.losses) || 0,
+        avgPnlPct: Number(snapshot.stats.avgPnlPct) || 0
+      };
+    }
+    if (snapshot.venueStats && typeof snapshot.venueStats === 'object') {
+      this.venueStats = {};
+      for (const [venue, value] of Object.entries(snapshot.venueStats)) {
+        this.venueStats[venue] = {
+          wins: Number(value.wins) || 0,
+          losses: Number(value.losses) || 0,
+          avgPnlPct: Number(value.avgPnlPct) || 0
+        };
+      }
+    }
+  }
 }
 
 module.exports = { LearningEngine };

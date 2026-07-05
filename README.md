@@ -110,6 +110,7 @@ npm start
 - `LIVE_AUTO_WATCHLIST_SIZE` – top candidate count to keep in the active watchlist
 - `LIVE_REQUIRE_SUPERVISION` – require manual approval before live entries and exits are executed
 - `LIVE_SLIPPAGE_BPS` – default `100`
+- `BOT_STATE_FILE` – optional JSON snapshot path for persisted learning/trade state across restarts
 - `DASHBOARD_ALLOWED_WALLETS` – comma-separated Solana wallet addresses allowed to sign in to the dashboard
 - `DASHBOARD_CHALLENGE_TTL_MS` – wallet sign-in challenge lifetime, default `300000`
 - `DASHBOARD_SESSION_TTL_MS` – wallet session lifetime, default `43200000`
@@ -121,9 +122,16 @@ npm start
 - Live mode is currently **Solana only**
 - It can trade a fixed watchlist or automatically rank a configured candidate list into an active watchlist each cycle
 - Quotes and swap transactions are requested from Jupiter
+- Entry decisions now include execution-quality gating (expected slippage, depth, failure-rate checks) and portfolio exposure limits
 - The bot expects a dedicated SOL-funded wallet; pre-existing token holdings are not imported into bot state
 - `SOLANA_WATCHLIST_JSON` should include `liquidityUsd` and `rugScore`; missing values default to conservative safety values and will usually block entries
 - Supervised mode queues entry and exit decisions until an authenticated operator approves or rejects them through the dashboard API
+
+## Adaptive optimization model
+
+- Strategy selection uses a risk-adjusted score (growth + drawdown + stability) instead of raw equity only.
+- Pattern recommendations (best momentum/liquidity bands) are automatically fed back into strategy thresholds.
+- The default paper feed now rotates through dynamic trend/volatility regimes and includes execution-quality context fields.
 
 ## Web Dashboard
 

@@ -15,6 +15,11 @@ class PaperExecutor {
       // opportunity metadata stored for pattern analysis
       liquidityUsd: opportunity.liquidityUsd,
       momentumScore: opportunity.momentumScore,
+      tokenCategory: opportunity.tokenCategory || 'uncategorized',
+      expectedSlippageBps: opportunity.expectedSlippageBps ?? null,
+      depthScore: opportunity.depthScore ?? null,
+      executionFailureRate: opportunity.executionFailureRate ?? null,
+      trendState: opportunity.marketContext?.trendState ?? null,
       openedAt: new Date().toISOString()
     };
     state.bankrollSol -= decision.sizeSol;

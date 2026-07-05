@@ -21,6 +21,7 @@ const RISK_CONFIG = {
 
   // Entry edge requirement
   minExpectedEdge: 0.25,
+  minRiskAdjustedScore: 0.18,
 
   // Take-profit / stop-loss (asymmetric R:R ~6:1)
   takeProfitBasePct: 0.25,
@@ -31,6 +32,34 @@ const RISK_CONFIG = {
   // Trailing stop: activates once a position gains trailActivatePct
   trailActivatePct: 0.10,
   trailPct: 0.05,
+
+  // Execution quality controls
+  maxExpectedSlippageBps: 180,
+  minDepthScore: 0.35,
+  maxExecutionFailureRate: 0.2,
+
+  // Portfolio concentration controls
+  maxVenueExposurePct: 0.5,
+  maxTokenCategoryExposurePct: 0.35,
+  maxCorrelatedPairExposurePct: 0.3,
+
+  // Regime adaptation
+  regimeMultipliers: {
+    bull: 1.12,
+    chop: 0.92,
+    bear: 0.78
+  },
+  volatilityRegimeMultipliers: {
+    low: 1.05,
+    mid: 1,
+    high: 0.82
+  },
+
+  // Variant scoring / walk-forward validation
+  walkForwardWindow: 20,
+  variantStabilityWeight: 0.25,
+  variantRiskWeight: 0.4,
+  variantGrowthWeight: 0.35,
 
   learning: {
     perfBiasBase: 0.5,
@@ -64,7 +93,11 @@ const STRATEGY_VARIANTS = [
     maxDrawdownPct: 0.10,
     minLiquidityUsd: 50000,
     trailActivatePct: 0.08,
-    trailPct: 0.04
+    trailPct: 0.04,
+    minRiskAdjustedScore: 0.2,
+    maxExpectedSlippageBps: 120,
+    maxVenueExposurePct: 0.4,
+    maxTokenCategoryExposurePct: 0.3
   },
   {
     name: 'balanced',
@@ -83,7 +116,11 @@ const STRATEGY_VARIANTS = [
     maxDrawdownPct: 0.20,
     minLiquidityUsd: 15000,
     trailActivatePct: 0.12,
-    trailPct: 0.06
+    trailPct: 0.06,
+    minRiskAdjustedScore: 0.12,
+    maxExpectedSlippageBps: 220,
+    maxVenueExposurePct: 0.65,
+    maxTokenCategoryExposurePct: 0.45
   }
 ];
 
