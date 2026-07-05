@@ -364,7 +364,6 @@
 <script>
   /* ── Storage keys ── */
   const KEY_URL = 'sb_server_url';
-  const KEY_SECRET = 'sb_secret_key';   // sessionStorage only — not persisted across browser sessions
   const KEY_SESSION = 'sb_wallet_session';
 
   /* ── State ── */
@@ -416,7 +415,8 @@
   /* ── Settings ── */
   function loadSettings() {
     serverUrl = localStorage.getItem(KEY_URL) || '';
-    secretKey = sessionStorage.getItem(KEY_SECRET) || '';
+    // Secret key is never persisted — users must re-enter it each session for security.
+    secretKey = '';
     sessionToken = sessionStorage.getItem(KEY_SESSION) || '';
   }
   function saveSettings() {
@@ -424,11 +424,7 @@
     serverUrl = inpUrl.value.trim().replace(/\/$/, '');
     secretKey = inpKey.value.trim();
     localStorage.setItem(KEY_URL, serverUrl);
-    if (secretKey) {
-      sessionStorage.setItem(KEY_SECRET, secretKey);
-    } else {
-      sessionStorage.removeItem(KEY_SECRET);
-    }
+    // Secret key is intentionally NOT stored in any Web Storage API.
     if (prevUrl && serverUrl !== prevUrl) {
       // Server URL changed; invalidate any session from the old server
       clearWalletSession();
@@ -497,8 +493,9 @@
     let challengeBody = {};
     try { challengeBody = JSON.parse(challengeBodyText); } catch (_) {}
     if (!challengeRes.ok) {
-      const isHtml = (challengeRes.headers.get('content-type') || '').includes('text/html') ||
-                     challengeBodyText.trim().startsWith('<');
+      const contentType = challengeRes.headers.get('content-type') || '';
+      const isHtml = contentType.includes('text/html') ||
+                     /^<!DOCTYPE\b|^<html\b/i.test(challengeBodyText.trim());
       throw new Error(
         challengeBody.error ||
         (isHtml
@@ -736,7 +733,7 @@
       return;
     }
     // Warn when a secret key is used over plain HTTP (not localhost) — credentials would be sent unencrypted.
-    if (secretKey && /^http:\/\//i.test(serverUrl) && !/^http:\/\/localhost\b/i.test(serverUrl)) {
+    if (secretKey && /^http:\/\//i.test(serverUrl) && !/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])\b/i.test(serverUrl)) {
       modalErr.textContent =
         '⚠ You are sending a secret key over an unencrypted HTTP connection. ' +
         'Use HTTPS for remote servers to keep your credentials safe.';
