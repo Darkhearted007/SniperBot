@@ -663,7 +663,7 @@
   btnRefresh.addEventListener('click', () => { clearInterval(refreshTimer); startAutoRefresh(); });
   modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
-    btnSave.addEventListener('click', async () => {
+  btnSave.addEventListener('click', async () => {
     modalErr.classList.add('hidden');
     saveSettings();
     if (!serverUrl) { modalErr.textContent = 'Server URL is required.'; modalErr.classList.remove('hidden'); return; }

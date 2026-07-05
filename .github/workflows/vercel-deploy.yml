@@ -27,11 +27,12 @@ permissions:
 
 jobs:
   preview:
-    if: github.event_name == 'pull_request' && secrets.VERCEL_TOKEN != ''
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,15 +41,19 @@ jobs:
           node-version: 20
 
       - name: Install Vercel CLI
+        if: env.VERCEL_TOKEN != ''
         run: npm install --global vercel@latest
 
       - name: Pull Vercel environment
+        if: env.VERCEL_TOKEN != ''
         run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build artifacts
+        if: env.VERCEL_TOKEN != ''
         run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy preview
+        if: env.VERCEL_TOKEN != ''
         id: deploy
         run: |
           url="$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})"
@@ -56,6 +61,7 @@ jobs:
           echo "Preview deployment: $url" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment preview URL
+        if: env.VERCEL_TOKEN != ''
         uses: actions/github-script@v7
         with:
           script: |
@@ -68,11 +74,12 @@ jobs:
             });
 
   production:
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && secrets.VERCEL_TOKEN != ''
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -81,15 +88,19 @@ jobs:
           node-version: 20
 
       - name: Install Vercel CLI
+        if: env.VERCEL_TOKEN != ''
         run: npm install --global vercel@latest
 
       - name: Pull Vercel environment
+        if: env.VERCEL_TOKEN != ''
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build artifacts
+        if: env.VERCEL_TOKEN != ''
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy production
+        if: env.VERCEL_TOKEN != ''
         run: |
           url="$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})"
           echo "Production deployment: $url" >> "$GITHUB_STEP_SUMMARY"
