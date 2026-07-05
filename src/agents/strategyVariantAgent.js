@@ -142,10 +142,12 @@ class StrategyVariantAgent {
     const priorEquity = inst.equityHistory[inst.equityHistory.length - 1] || this._startingEquityFor(inst);
     if (priorEquity > 0) {
       inst.recentReturns.push((equity - priorEquity) / priorEquity);
-      inst.recentReturns = inst.recentReturns.slice(-this.walkForwardWindow);
     }
     inst.equityHistory.push(equity);
-    inst.equityHistory = inst.equityHistory.slice(-this.walkForwardWindow);
+    // Always enforce the window cap, even if walkForwardWindow changed since last cycle
+    const cap = this.walkForwardWindow;
+    if (inst.recentReturns.length > cap) inst.recentReturns = inst.recentReturns.slice(-cap);
+    if (inst.equityHistory.length > cap) inst.equityHistory = inst.equityHistory.slice(-cap);
   }
 }
 
