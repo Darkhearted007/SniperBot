@@ -181,8 +181,13 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
     // Secret-key auth: fastest path — no session lookup needed.
     if (secretKey) {
       const headerKey = String(req.headers['x-secret-key'] || '').trim();
-      if (headerKey && crypto.timingSafeEqual(Buffer.from(headerKey), Buffer.from(secretKey))) {
-        return true;
+      if (headerKey) {
+        // timingSafeEqual requires equal-length buffers; length check first avoids the exception.
+        const hk = Buffer.from(headerKey);
+        const sk = Buffer.from(secretKey);
+        if (hk.length === sk.length && crypto.timingSafeEqual(hk, sk)) {
+          return true;
+        }
       }
     }
 
