@@ -165,7 +165,7 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader(
       'Access-Control-Allow-Headers',
-      'authorization, content-type'
+      'authorization, content-type, x-secret-key'
     );
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   }
