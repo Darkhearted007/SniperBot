@@ -252,12 +252,6 @@
       <input id="inp-url" type="url" placeholder="http://localhost:3000" autocomplete="off" spellcheck="false">
       <p class="hint" aria-label="Example URLs: http://192.168.1.x:3000 locally, or https://your-app.up.railway.app on Railway">e.g. <code>http://192.168.1.x:3000</code> locally, or <code>https://your-app.up.railway.app</code> on Railway</p>
     </div>
-    <div class="field">
-      <label>Secret Key (optional fallback)</label>
-      <input id="inp-key" type="password" placeholder="value of DASHBOARD_SECRET_KEY" autocomplete="off" spellcheck="false">
-      <p class="hint">Leave blank to sign in with a connected Solana wallet such as Phantom</p>
-      <p class="hint">Set with <code>DASHBOARD_SECRET_KEY=…</code> when starting the bot</p>
-    </div>
     <div id="modal-error" class="banner error hidden" style="margin-bottom:12px"></div>
     <div class="modal-actions">
       <button id="btn-cancel" class="danger">Cancel</button>
@@ -367,13 +361,9 @@
   /* ── Storage keys ── */
   const KEY_URL = 'sb_server_url';
   const KEY_SESSION = 'sb_wallet_session';
-  // NOTE: The secret key is intentionally not persisted to disk/storage
-  // to avoid clear-text storage of credentials. Only the server URL is
-  // saved; the key is kept in memory and re-entered each browser session.
 
   /* ── State ── */
   let serverUrl = '';
-  let secretKey = '';
   let sessionToken = '';
   let refreshTimer = null;
   let lastFetchAt = null;
@@ -386,7 +376,6 @@
   const btnCancel = $('btn-cancel');
   const btnRefresh = $('btn-refresh');
   const inpUrl    = $('inp-url');
-  const inpKey    = $('inp-key');
   const modalErr  = $('modal-error');
   const errBanner = $('error-banner');
   const statusDot = $('status-dot');
@@ -420,18 +409,13 @@
   /* ── Settings ── */
   function loadSettings() {
     serverUrl = localStorage.getItem(KEY_URL) || '';
-    secretKey = ''; // never loaded from storage; user re-enters each session
     sessionToken = sessionStorage.getItem(KEY_SESSION) || '';
   }
   function saveSettings() {
     const prevUrl = serverUrl;
     serverUrl = inpUrl.value.trim().replace(/\/$/, '');
-    secretKey = inpKey.value.trim();
     localStorage.setItem(KEY_URL, serverUrl);
-    // secretKey is intentionally NOT saved to storage
-    if (secretKey) {
-      clearWalletSession();
-    } else if (prevUrl && serverUrl !== prevUrl) {
+    if (prevUrl && serverUrl !== prevUrl) {
       // Server URL changed; invalidate any session from the old server
       clearWalletSession();
     }
@@ -442,7 +426,6 @@
   }
   function openModal() {
     inpUrl.value = serverUrl || window.location.origin;
-    inpKey.value = secretKey;
     modalErr.classList.add('hidden');
     // If the saved URL is a Railway project management URL, warn the user immediately.
     if (/^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(serverUrl)) {
@@ -469,7 +452,7 @@
   async function connectWalletSession() {
     const provider = getWalletProvider();
     if (!provider) {
-      throw new Error('No Solana wallet found. Install Phantom or enter a secret key.');
+      throw new Error('No Solana wallet found. Install Phantom or another Solana wallet extension.');
     }
     if (typeof provider.connect !== 'function' || typeof provider.signMessage !== 'function') {
       throw new Error('The connected wallet does not support message signing.');
@@ -511,8 +494,7 @@
   /* ── Fetch ── */
   async function fetchSummary() {
     const headers = {};
-    if (secretKey) headers['x-secret-key'] = encodeURIComponent(secretKey);
-    else if (sessionToken) headers.authorization = 'Bearer ' + sessionToken;
+    if (sessionToken) headers.authorization = 'Bearer ' + sessionToken;
     const res = await fetch(serverUrl + '/summary', { headers });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
@@ -681,7 +663,7 @@
   btnRefresh.addEventListener('click', () => { clearInterval(refreshTimer); startAutoRefresh(); });
   modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
-  btnSave.addEventListener('click', async () => {
+    btnSave.addEventListener('click', async () => {
     modalErr.classList.add('hidden');
     saveSettings();
     if (!serverUrl) { modalErr.textContent = 'Server URL is required.'; modalErr.classList.remove('hidden'); return; }
@@ -694,10 +676,10 @@
       modalErr.classList.remove('hidden');
       return;
     }
-    btnSave.textContent = 'Testing…';
+    btnSave.textContent = 'Connecting wallet…';
     btnSave.disabled = true;
     try {
-      if (!secretKey && !sessionToken) {
+      if (!sessionToken) {
         await connectWalletSession();
       }
       await fetchSummary();

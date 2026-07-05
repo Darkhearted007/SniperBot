@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   preview:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && secrets.VERCEL_TOKEN != ''
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -68,7 +68,7 @@ jobs:
             });
 
   production:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && secrets.VERCEL_TOKEN != ''
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
