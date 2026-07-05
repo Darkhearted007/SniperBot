@@ -95,11 +95,11 @@ function parseBoolean(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
 }
 
-function parseNonNegativeNumber(value, defaultValue) {
+function parseNonNegativeNumber(value, defaultValue, fieldName = 'Parameter') {
   if (value == null || value === '') return defaultValue;
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error('PAPER_CYCLE_DELAY_MS must be a non-negative number');
+    throw new Error(`${fieldName} must be a non-negative number`);
   }
   return parsed;
 }
@@ -124,7 +124,12 @@ function closeServer(server) {
   });
 }
 
-async function runMain(env = process.env) {
+const MAX_LIVE_BACKOFF_MS = 60 * 1000;
+const MAX_PAPER_BACKOFF_MS = 5 * 1000;
+const DEFAULT_PAPER_BASE_DELAY_MS = 50;
+const PAPER_PROGRESS_LOG_INTERVAL = 50;
+
+async function runMain(env = process.env, runtime = process) {
   const mode = getTradingMode(env);
   const port = Number(env.PORT || 3000);
   const shutdown = {
@@ -145,17 +150,19 @@ async function runMain(env = process.env) {
   const unhandledRejectionHandler = (reason) => {
     const error = reason instanceof Error ? reason : new Error(String(reason));
     logEvent('error', 'unhandled-rejection', { error: error.message });
+    runtime.exitCode = 1;
+    requestShutdown('unhandled-rejection');
   };
   const uncaughtExceptionHandler = (error) => {
     logEvent('error', 'uncaught-exception', { error: error.message });
-    process.exitCode = 1;
+    runtime.exitCode = 1;
     requestShutdown('uncaught-exception');
   };
 
-  process.on('SIGINT', signalHandler);
-  process.on('SIGTERM', signalHandler);
-  process.on('unhandledRejection', unhandledRejectionHandler);
-  process.on('uncaughtException', uncaughtExceptionHandler);
+  runtime.on('SIGINT', signalHandler);
+  runtime.on('SIGTERM', signalHandler);
+  runtime.on('unhandledRejection', unhandledRejectionHandler);
+  runtime.on('uncaughtException', uncaughtExceptionHandler);
 
   try {
     if (mode === 'live') {
@@ -184,7 +191,10 @@ async function runMain(env = process.env) {
           });
         } catch (error) {
           consecutiveCycleFailures += 1;
-          const backoffMs = Math.min(liveConfig.pollIntervalMs * 2 ** (consecutiveCycleFailures - 1), 60_000);
+          const backoffMs = Math.min(
+            liveConfig.pollIntervalMs * 2 ** (consecutiveCycleFailures - 1),
+            MAX_LIVE_BACKOFF_MS
+          );
           logEvent('error', 'live-cycle-failed', {
             error: error.message,
             consecutiveFailures: consecutiveCycleFailures,
@@ -199,7 +209,8 @@ async function runMain(env = process.env) {
     }
 
     const paperAutoStopOnGoal = parseBoolean(env.PAPER_AUTO_STOP_ON_GOAL);
-    const paperCycleDelayMs = parseNonNegativeNumber(env.PAPER_CYCLE_DELAY_MS, 0);
+    const paperCycleDelayMs = parseNonNegativeNumber(env.PAPER_CYCLE_DELAY_MS, 0, 'PAPER_CYCLE_DELAY_MS');
+    const paperBackoffBaseDelayMs = paperCycleDelayMs > 0 ? paperCycleDelayMs : DEFAULT_PAPER_BASE_DELAY_MS;
     const { orchestrator, goalAgent, variantAgent } = buildOrchestrator({
       stopOnGoal: paperAutoStopOnGoal
     });
@@ -233,10 +244,10 @@ async function runMain(env = process.env) {
             equity: Number(result.goalStatus.equity.toFixed(6))
           });
           requestShutdown('paper-goal-stop');
-          continue;
+          break;
         }
 
-        if (cycleCounter % 50 === 0) {
+        if (cycleCounter % PAPER_PROGRESS_LOG_INTERVAL === 0) {
           logEvent('info', 'paper-cycle-progress', {
             cycle: result.cycle,
             equity: Number(result.goalStatus.equity.toFixed(6)),
@@ -246,8 +257,10 @@ async function runMain(env = process.env) {
         }
       } catch (error) {
         consecutiveCycleFailures += 1;
-        const baseDelayMs = paperCycleDelayMs > 0 ? paperCycleDelayMs : 50;
-        const backoffMs = Math.min(baseDelayMs * 2 ** (consecutiveCycleFailures - 1), 5_000);
+        const backoffMs = Math.min(
+          paperBackoffBaseDelayMs * 2 ** (consecutiveCycleFailures - 1),
+          MAX_PAPER_BACKOFF_MS
+        );
         logEvent('error', 'paper-cycle-failed', {
           error: error.message,
           consecutiveFailures: consecutiveCycleFailures,
@@ -259,7 +272,7 @@ async function runMain(env = process.env) {
 
       if (paperCycleDelayMs > 0) {
         await sleep(paperCycleDelayMs);
-      } else if (cycleCounter % 50 === 0) {
+      } else if (cycleCounter % PAPER_PROGRESS_LOG_INTERVAL === 0) {
         await sleep(0);
       }
     }
@@ -267,10 +280,10 @@ async function runMain(env = process.env) {
     if (!shuttingDown) {
       shuttingDown = true;
       await closeServer(server);
-      process.off('SIGINT', signalHandler);
-      process.off('SIGTERM', signalHandler);
-      process.off('unhandledRejection', unhandledRejectionHandler);
-      process.off('uncaughtException', uncaughtExceptionHandler);
+      runtime.off('SIGINT', signalHandler);
+      runtime.off('SIGTERM', signalHandler);
+      runtime.off('unhandledRejection', unhandledRejectionHandler);
+      runtime.off('uncaughtException', uncaughtExceptionHandler);
       logEvent('info', 'shutdown-complete', { reason: shutdown.reason || 'unknown' });
     }
   }
