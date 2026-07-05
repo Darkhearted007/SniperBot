@@ -424,13 +424,16 @@
     sessionToken = sessionStorage.getItem(KEY_SESSION) || '';
   }
   function saveSettings() {
+    const prevUrl = serverUrl;
     serverUrl = inpUrl.value.trim().replace(/\/$/, '');
     secretKey = inpKey.value.trim();
     localStorage.setItem(KEY_URL, serverUrl);
     // secretKey is intentionally NOT saved to storage
     if (secretKey) {
-      sessionToken = '';
-      sessionStorage.removeItem(KEY_SESSION);
+      clearWalletSession();
+    } else if (prevUrl && serverUrl !== prevUrl) {
+      // Server URL changed; invalidate any session from the old server
+      clearWalletSession();
     }
   }
   function clearWalletSession() {
@@ -545,8 +548,9 @@
     $('val-bankroll').className   = 'metric-value';
 
     const pnlEl = $('val-pnl');
-    pnlEl.textContent = (pnl >= 0 ? '+' : '') + fmt(pnl, 4);
-    pnlEl.className   = 'metric-value ' + (pnl >= 0 ? 'positive' : 'negative');
+    pnlEl.textContent = pnl == null ? '—' : (pnl >= 0 ? '+' : '') + fmt(pnl, 4);
+    const pnlClass = pnl == null ? '' : pnl >= 0 ? ' positive' : ' negative';
+    pnlEl.className   = 'metric-value' + pnlClass;
 
     const cbEl = $('val-cb');
     cbEl.textContent = cb ? 'ACTIVE' : 'OFF';
@@ -693,7 +697,7 @@
     btnSave.textContent = 'Testing…';
     btnSave.disabled = true;
     try {
-      if (!secretKey) {
+      if (!secretKey && !sessionToken) {
         await connectWalletSession();
       }
       await fetchSummary();
