@@ -1,2 +1,5 @@
 node_modules/
 public/
+tunnel-status.json
+start-live.ps1
+.env

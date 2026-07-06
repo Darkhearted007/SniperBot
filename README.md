@@ -268,6 +268,40 @@ vercel --prod
 
 > **Note:** The bot itself (simulation loop + API) must run on a persistent host such as a VPS, home server, or a tunnel like [ngrok](https://ngrok.com/) / [Cloudflare Tunnel](https://www.cloudflare.com/products/tunnel/). Vercel only hosts the static UI.
 
+### Hybrid tunnel (ngrok + Cloudflare, with automatic failover)
+
+For testing on a home server before committing to a VPS, `scripts/tunnel-manager.js` runs an ngrok tunnel and a Cloudflare quick tunnel **simultaneously**, both pointed at the same local port. The dashboard automatically fails over between them, so a single tunnel dropping doesn't take your monitoring offline.
+
+**Requirements:**
+- [ngrok](https://ngrok.com/download) installed and authenticated once via `ngrok config add-authtoken <token>`
+- [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) installed (no Cloudflare account or domain needed — this uses cloudflared's free "quick tunnel" mode)
+- Both binaries on your `PATH`
+
+**Run it** (in a separate terminal from the bot itself):
+```bash
+npm run tunnel
+# or: node scripts/tunnel-manager.js --port 3000
+```
+
+It prints both public URLs as they're detected, e.g.:
+```
+[ngrok] public URL: https://abcd-1234.ngrok-free.app  <-- set this as "Server URL" in the dashboard
+[cloudflared] public URL: https://random-words-1234.trycloudflare.com  <-- set this as "Fallback Server URL" in the dashboard
+```
+
+It also writes them to `tunnel-status.json` (gitignored) and respawns either tunnel with backoff if it drops.
+
+**Configure the dashboard:** open ⚙ Settings and enter:
+- **Server URL (primary)**: the ngrok URL
+- **Fallback Server URL**: the Cloudflare quick-tunnel URL
+
+The dashboard tries the primary URL on every 3-second poll; if that fails (timeout or network error — not an auth error), it transparently retries against the fallback and shows **"Live (fallback)"** in the status bar. Because it always tries the primary first, it self-heals back automatically once that tunnel is reachable again — no manual switch-back needed.
+
+**Honest limitations:**
+- Free-tier ngrok and cloudflared quick tunnels issue a **new random URL every time the process restarts** (not on every network blip — only on a full restart). If the tunnel manager has to respawn a tunnel, update that URL in the dashboard settings once it prints the new one.
+- The wallet sign-in flow (`/auth/challenge` and `/auth/verify`) only uses the primary URL, not the fallback — the secret-key auth path is what benefits from failover today.
+- This is meant for testing, not production uptime guarantees — a VPS with a static IP/domain removes the URL-rotation problem entirely.
+
 ## API endpoints
 
 | Method | Path | Auth | Description |
