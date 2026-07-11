@@ -64,6 +64,13 @@ In the Railway dashboard, go to your project → **Variables** tab. Add all of t
 | `BOT_STATE_FILE` | `./sniperbot-state.json` |
 | `BOT_STATE_PERSIST_EVERY_CYCLES` | `10` |
 
+### Supabase (optional — database persistence)
+| Variable | Value |
+|----------|-------|
+| `SUPABASE_URL` | Your Supabase project URL |
+| `SUPABASE_ANON_KEY` | Your Supabase anon/public key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Your Supabase service role key (recommended for backend) |
+
 ---
 
 ## Step 3: Deploy
@@ -113,3 +120,4 @@ When you're ready to trade live:
 | "No open positions" | Normal in paper mode — the synthetic feed creates random token data |
 | Wallet balance too low | Send more SOL to the wallet address |
 | WebSocket disconnects | Check `SOLANA_WS_URL` is correct with `wss://` prefix |
+| Supabase tables missing | Run the SQL from `supabase-migration.sql` in Supabase SQL Editor |

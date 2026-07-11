@@ -17,20 +17,22 @@ const { SolanaRpcClient } = require('./live/solanaRpcClient');
 const { SolanaSafetyProvider } = require('./safety/onChainSafety');
 const { TradeApprovalQueue } = require('./live/tradeApprovalQueue');
 const { getTradingMode, parseLiveTradingConfig } = require('./live/config');
+const { createSupabaseClient, ensureTables } = require('./lib/supabase');
 const { loadState, saveState } = require('./learning/stateStore');
 
-function buildApp() {
+function buildApp(env = process.env) {
+  const supabase = createSupabaseClient(env);
   const learning = new LearningEngine();
-  const logger = new TradeLogger();
+  const logger = new TradeLogger({ supabase });
   const strategy = new StrategyEngine({ learningEngine: learning });
   const executor = new PaperExecutor();
   const feed = createOpportunityFeed();
   const simulator = new PaperTradingSimulator({ strategy, executor, logger, learning, feed });
 
-  return { simulator, logger, learning };
+  return { simulator, logger, learning, supabase };
 }
 
-function buildOrchestrator({ stopOnGoal = true, persistedState = null } = {}) {
+function buildOrchestrator({ stopOnGoal = true, persistedState = null, supabase = null } = {}) {
   const feed = createOpportunityFeed();
   const goalAgent = new GoalAgent();
   const patternAgent = new PatternAgent();
@@ -54,8 +56,9 @@ async function buildLiveApp(env = process.env, persistedState = null) {
     throw new Error('buildLiveApp requires TRADING_MODE=live');
   }
 
+  const supabase = createSupabaseClient(env);
   const learning = new LearningEngine();
-  const logger = new TradeLogger();
+  const logger = new TradeLogger({ supabase });
   const strategy = new StrategyEngine({ learningEngine: learning });
   const goalAgent = new GoalAgent();
   const client = await new SolanaRpcClient({
@@ -176,7 +179,14 @@ async function runMain(env = process.env, runtime = process) {
   let persistDebounceCounter = 0;
   let activeOrchestrator = null;
   let activeLiveBot = null;
-  persistedState = await loadState(env.BOT_STATE_FILE);
+
+  // Try to auto-create Supabase tables on boot (best-effort)
+  const bootSupabase = createSupabaseClient(env);
+  if (bootSupabase) {
+    ensureTables(bootSupabase).catch(() => {});
+  }
+
+  persistedState = await loadState(env.BOT_STATE_FILE, env);
 
   const requestShutdown = (reason) => {
     if (shutdown.requested) return;
@@ -226,7 +236,7 @@ async function runMain(env = process.env, runtime = process) {
           consecutiveCycleFailures = 0;
           persistDebounceCounter += 1;
           if (persistDebounceCounter % statePersistEvery === 0) {
-            await saveState(env.BOT_STATE_FILE, { live: bot.snapshot() });
+            await saveState(env.BOT_STATE_FILE, { live: bot.snapshot() }, env);
           }
           logEvent('info', 'live-cycle-complete', {
             bankrollSol: Number(result.bankrollSol.toFixed(6)),
@@ -286,7 +296,7 @@ async function runMain(env = process.env, runtime = process) {
         cycleCounter += 1;
         consecutiveCycleFailures = 0;
         if (cycleCounter % statePersistEvery === 0) {
-          await saveState(env.BOT_STATE_FILE, { orchestrator: orchestrator.snapshot() });
+          await saveState(env.BOT_STATE_FILE, { orchestrator: orchestrator.snapshot() }, env);
         }
 
         if (result.stop) {
@@ -333,14 +343,14 @@ async function runMain(env = process.env, runtime = process) {
       shuttingDown = true;
       if (mode === 'paper' && activeOrchestrator) {
         try {
-          await saveState(env.BOT_STATE_FILE, { orchestrator: activeOrchestrator.snapshot() });
+          await saveState(env.BOT_STATE_FILE, { orchestrator: activeOrchestrator.snapshot() }, env);
         } catch (error) {
           logEvent('error', 'state-save-failed', { error: error.message });
         }
       }
       if (mode === 'live' && activeLiveBot) {
         try {
-          await saveState(env.BOT_STATE_FILE, { live: activeLiveBot.snapshot() });
+          await saveState(env.BOT_STATE_FILE, { live: activeLiveBot.snapshot() }, env);
         } catch (error) {
           logEvent('error', 'state-save-failed', { error: error.message });
         }
