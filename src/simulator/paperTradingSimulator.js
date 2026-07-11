@@ -75,7 +75,11 @@ class PaperTradingSimulator {
     this.state.highWatermark = Math.max(baselineWatermark, equity);
     this.state.drawdownPct = 1 - (equity / this.state.highWatermark);
     this.state.dailyLossPct = Math.max(0, -this.state.realizedPnlTodaySol / cfg.startingBankrollSol);
-    if (this.state.drawdownPct >= cfg.maxDrawdownPct) this.state.circuitBreaker = true;
+    if (this.state.drawdownPct >= cfg.maxDrawdownPct) {
+      this.state.circuitBreaker = true;
+    } else if (this.state.drawdownPct < cfg.maxDrawdownPct * 0.7) {
+      this.state.circuitBreaker = false;
+    }
   }
 
   runCycle() {

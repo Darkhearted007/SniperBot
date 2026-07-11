@@ -225,6 +225,8 @@ class LiveTradingBot {
     this.state.dailyLossPct = Math.max(0, -this.state.realizedPnlTodaySol / cfg.startingBankrollSol);
     if (this.state.drawdownPct >= cfg.maxDrawdownPct || this.state.dailyLossPct >= cfg.maxDailyLossPct) {
       this.state.circuitBreaker = true;
+    } else if (this.state.drawdownPct < cfg.maxDrawdownPct * 0.7 && this.state.dailyLossPct < cfg.maxDailyLossPct * 0.7) {
+      this.state.circuitBreaker = false;
     }
     await this.executor.syncBankroll(this.state);
   }

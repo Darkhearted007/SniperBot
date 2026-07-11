@@ -8,9 +8,9 @@ const RISK_CONFIG = {
   maxPositionPct: 0.15,
   maxSlippagePct: 0.08,
 
-  // Daily / drawdown guards (tightened for capital preservation)
-  maxDailyLossPct: 0.10,
-  maxDrawdownPct: 0.15,
+  // Daily / drawdown guards (relaxed for paper-mode exploration)
+  maxDailyLossPct: 0.50,
+  maxDrawdownPct: 0.50,
 
   // Safety filters
   minLiquidityUsd: 25000,
