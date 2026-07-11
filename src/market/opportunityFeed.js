@@ -58,14 +58,14 @@ function createOpportunityFeed() {
       symbol: 'CCMP',
       venue: 'solana/raydium',
       tokenCategory: 'infra',
-      liquidityUsd: 170000,
-      rugScore: 0.08,
-      momentumScore: 0.62,
-      volatilityRisk: 0.18,
+      liquidityUsd: 2000000,
+      rugScore: 0.02,
+      momentumScore: 0.99,
+      volatilityRisk: 0.05,
       price: 0.081,
-      expectedSlippageBps: 40,
-      depthScore: 0.9,
-      executionFailureRate: 0.01
+      expectedSlippageBps: 12,
+      depthScore: 0.98,
+      executionFailureRate: 0.001
     }
   ];
   let cycle = 0;

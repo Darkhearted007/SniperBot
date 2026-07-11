@@ -27,9 +27,9 @@ const RISK_CONFIG = {
   maxTopHolderPct: 0.5,
   safetyCacheTtlMs: 60_000,
 
-  // Entry edge requirement
-  minExpectedEdge: 0.25,
-  minRiskAdjustedScore: 0.18,
+  // Entry edge requirement (relaxed for paper-mode synthetic feed)
+  minExpectedEdge: 0.20,
+  minRiskAdjustedScore: 0.10,
 
   // Take-profit / stop-loss (asymmetric R:R ~6:1)
   takeProfitBasePct: 0.25,
@@ -91,7 +91,8 @@ const STRATEGY_VARIANTS = [
   {
     name: 'conservative',
     ...RISK_CONFIG,
-    minExpectedEdge: 0.35,
+    minExpectedEdge: 0.25,
+    minRiskAdjustedScore: 0.12,
     maxPositionPct: 0.10,
     stopLossBasePct: 0.04,
     stopLossConfidenceScale: 0.06,
