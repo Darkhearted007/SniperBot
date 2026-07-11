@@ -1,7 +1,7 @@
 #!/bin/bash
 set -a
 # ── Mode ──
-TRADING_MODE=paper
+TRADING_MODE=live
 PORT=3000
 DASHBOARD_SECRET_KEY=devpreview
 
