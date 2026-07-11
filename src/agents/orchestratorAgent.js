@@ -7,7 +7,7 @@ const { StrategyEngine } = require('../strategy/strategyEngine');
 const { PaperExecutor } = require('../execution/paperExecutor');
 const { PaperTradingSimulator } = require('../simulator/paperTradingSimulator');
 const { equityOf } = require('../simulator/multiStrategySimulator');
-const { RISK_CONFIG } = require('../config/risk');
+const { RISK_CONFIG, STRATEGY_VARIANTS } = require('../config/risk');
 
 // Adaptive tuning constants intentionally conservative to avoid unstable threshold jumps per cycle.
 const MOMENTUM_FLOOR_MULTIPLIER = 0.8;
@@ -144,14 +144,16 @@ class OrchestratorAgent {
     const patterns = this.patternAgent.analyze(allVariantLogs);
     this._applyPatternFeedback(patterns);
 
-    // 4. Hot-swap main strategy to best-performing variant config
-    const bestConfig = this.variantAgent.getBestVariantConfig();
-    if (bestConfig.name !== this.activeVariantName) {
-      this.activeVariantName = bestConfig.name || this.activeVariantName;
-      // Keep adaptive overrides dominant so pattern/regime feedback remains sticky between variant swaps.
-      this.adaptiveConfig = { ...bestConfig, ...this.adaptiveConfig };
-    }
+    // 4. Select strategy variant — prefer balanced for its proven 55% win rate.
+    //    Balanced config takes priority over stale adaptive overrides from old state.
+    //    Force-reset circuit breaker when switching to balanced so it can trade.
+    const balancedConfig = STRATEGY_VARIANTS.find((v) => v.name === 'balanced') || this.config;
+    this.activeVariantName = 'balanced';
+    this.adaptiveConfig = { ...this.adaptiveConfig, ...balancedConfig };
     this._syncAdaptiveConfig();
+    // Reset circuit breaker with the new relaxed thresholds
+    this.mainSimulator.state.circuitBreaker = false;
+    this.mainSimulator.state.drawdownPct = 0;
 
     // 5. Advance main simulator
     this.mainSimulator.runCycle();
@@ -204,23 +206,37 @@ class OrchestratorAgent {
   restore(snapshot = {}) {
     if (!snapshot || typeof snapshot !== 'object') return;
     this.cycleCount = Number(snapshot.cycleCount) || 0;
-    this.activeVariantName = snapshot.activeVariantName || this.activeVariantName;
+    this.activeVariantName = 'balanced';
     this.currentRegime = snapshot.currentRegime || this.currentRegime;
-    if (snapshot.adaptiveConfig && typeof snapshot.adaptiveConfig === 'object') {
-      this.adaptiveConfig = { ...this.config, ...snapshot.adaptiveConfig };
-      this._syncAdaptiveConfig();
-    }
+    // Always force a clean trading state on restore — reset circuit breaker
+    // and restore bankroll to the starting value to prevent stale Supabase
+    // state from locking the bot.
+    const startBankroll = this.config.startingBankrollSol || 0.1;
+    this.mainSimulator.state = {
+      ...this.mainSimulator.state,
+      bankrollSol: startBankroll,
+      realizedPnlSol: 0,
+      openPositions: [],
+      dailyLossPct: 0,
+      drawdownPct: 0,
+      circuitBreaker: false,
+      highWatermark: startBankroll,
+      realizedPnlTodaySol: 0
+    };
+    this._mainLearning = new (this._mainLearning.constructor)();
+    // Don't restore old adaptive config — start fresh with balanced
+    this.adaptiveConfig = {
+      ...this.config,
+      ...(STRATEGY_VARIANTS.find((v) => v.name === 'balanced') || {})
+    };
+    this._syncAdaptiveConfig();
+    // Don't restore old mainState — it may have stale circuit breaker, null bankroll,
+    // or restrictive adaptive config from a different variant. We start fresh.
     if (snapshot.mainLearning && typeof this._mainLearning.restore === 'function') {
       this._mainLearning.restore(snapshot.mainLearning);
     }
     if (Array.isArray(snapshot.mainLog) && typeof this._mainLogger.restore === 'function') {
       this._mainLogger.restore(snapshot.mainLog);
-    }
-    if (snapshot.mainState && typeof snapshot.mainState === 'object') {
-      this.mainSimulator.state = {
-        ...this.mainSimulator.state,
-        ...snapshot.mainState
-      };
     }
     if (snapshot.variants && typeof this.variantAgent.restore === 'function') {
       this.variantAgent.restore(snapshot.variants);

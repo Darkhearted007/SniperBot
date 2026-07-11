@@ -81,11 +81,15 @@ class StrategyVariantAgent {
    * Falls back to the balanced config if no variant has traded yet.
    */
   getBestVariantConfig() {
-    const ranked = this.getSummary().filter((v) => (v.wins + v.losses) > 0);
-    if (ranked.length === 0) {
+    const summary = this.getSummary();
+    // Prefer variants without active circuit breakers — a variant that
+    // has already tripped its risk limits should not drive the main sim.
+    const activeOnly = summary.filter((v) => (v.wins + v.losses) > 0 && !v.circuitBreaker);
+    const pool = activeOnly.length > 0 ? activeOnly : summary.filter((v) => (v.wins + v.losses) > 0);
+    if (pool.length === 0) {
       return STRATEGY_VARIANTS.find((v) => v.name === 'balanced') || RISK_CONFIG;
     }
-    const bestName = ranked[0].name;
+    const bestName = pool[0].name;
     const match = this.instances.find((i) => i.name === bestName);
     return match ? match.config : RISK_CONFIG;
   }
