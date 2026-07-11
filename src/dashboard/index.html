@@ -3,72 +3,164 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SniperBot Dashboard</title>
+  <title>SniperBot — Live Trading Dashboard</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0a0a0f;
-      --surface: #12121c;
-      --border: #252535;
+      --bg: #07070d;
+      --bg-alt: #0b0b16;
+      --surface: #111122;
+      --surface-alt: #181830;
+      --border: #1e1e3a;
+      --border-glow: #2a2a55;
       --text: #d8d8f0;
-      --muted: #6b6b8f;
+      --text-muted: #6b6b8f;
       --green: #00d68f;
+      --green-dim: rgba(0,214,143,0.15);
       --red: #ff4d6a;
+      --red-dim: rgba(255,77,106,0.12);
       --yellow: #f0b90b;
+      --yellow-dim: rgba(240,185,11,0.15);
       --blue: #4d9eff;
-      --radius: 8px;
-      --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+      --blue-dim: rgba(77,158,255,0.12);
+      --purple: #8b5cf6;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
     }
 
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: var(--font);
       font-size: 14px;
       line-height: 1.5;
       min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-glow); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3a3a6a; }
+
+    /* ── Animated background ── */
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background-image:
+        linear-gradient(rgba(77,158,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(77,158,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      animation: grid-drift 20s linear infinite;
+    }
+    @keyframes grid-drift {
+      0% { transform: translate(0, 0); }
+      100% { transform: translate(-40px, -40px); }
     }
 
     /* ── Header ── */
     header {
       position: sticky;
       top: 0;
-      z-index: 10;
+      z-index: 50;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 20px;
-      background: rgba(10,10,15,0.95);
-      backdrop-filter: blur(8px);
+      padding: 12px 24px;
+      background: rgba(7,7,13,0.85);
+      backdrop-filter: blur(16px) saturate(1.4);
       border-bottom: 1px solid var(--border);
     }
-    .header-left { display: flex; align-items: center; gap: 10px; }
-    .logo { font-weight: 700; font-size: 16px; letter-spacing: 0.5px; }
-    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
-    .dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
-    .dot.error { background: var(--red); box-shadow: 0 0 6px var(--red); }
-    .header-right { display: flex; align-items: center; gap: 8px; }
-    #last-update { color: var(--muted); font-size: 12px; }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .logo {
+      font-weight: 800;
+      font-size: 18px;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.3px;
+    }
+    .logo-icon { font-size: 22px; -webkit-text-fill-color: initial; }
+    .conn-status {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .conn-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: all 0.3s ease;
+    }
+    .conn-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .conn-dot.error { background: var(--red); box-shadow: 0 0 8px var(--red); }
+    .conn-dot.pending { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    #last-update { color: var(--text-muted); font-size: 11px; font-family: var(--font-mono); }
 
     /* ── Buttons ── */
-    button {
+    .btn {
       background: var(--surface);
       border: 1px solid var(--border);
       color: var(--text);
-      border-radius: var(--radius);
-      padding: 5px 12px;
-      font-size: 13px;
+      border-radius: var(--radius-sm);
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
       cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
+      transition: all 0.2s ease;
+      font-family: var(--font);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
-    button:hover { background: #1e1e30; border-color: #444460; }
-    button.primary { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
-    button.primary:hover { background: #6ab4ff; }
-    button.danger { background: transparent; border-color: var(--red); color: var(--red); }
+    .btn:hover { background: var(--surface-alt); border-color: var(--border-glow); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--blue), #3b82f6);
+      border-color: var(--blue);
+      color: #fff;
+    }
+    .btn-primary:hover { box-shadow: 0 0 20px rgba(77,158,255,0.3); }
+    .btn-success {
+      background: linear-gradient(135deg, var(--green), #00b37a);
+      border-color: var(--green);
+      color: #fff;
+    }
+    .btn-success:hover { box-shadow: 0 0 20px rgba(0,214,143,0.3); }
+    .btn-danger {
+      background: linear-gradient(135deg, var(--red), #e0405a);
+      border-color: var(--red);
+      color: #fff;
+    }
+    .btn-danger:hover { box-shadow: 0 0 20px rgba(255,77,106,0.3); }
+    .btn-ghost { background: transparent; border-color: transparent; }
+    .btn-ghost:hover { background: var(--surface); }
+    .btn-sm { padding: 4px 10px; font-size: 11px; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
-    /* ── Main layout ── */
-    main { max-width: 960px; margin: 0 auto; padding: 20px 16px 40px; display: grid; gap: 14px; }
+    /* ── Main ── */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px 20px 60px;
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 16px;
+    }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+    }
+
+    .col-main { display: grid; gap: 14px; min-width: 0; }
+    .col-side { display: grid; gap: 14px; align-content: start; }
 
     /* ── Cards ── */
     .card {
@@ -76,63 +168,89 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 16px 18px;
+      transition: border-color 0.3s ease;
     }
-    .card-label {
+    .card:hover { border-color: var(--border-glow); }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .card-title {
       font-size: 10px;
       font-weight: 700;
-      letter-spacing: 1.2px;
-      color: var(--muted);
+      letter-spacing: 1.5px;
+      color: var(--text-muted);
       text-transform: uppercase;
-      margin-bottom: 10px;
     }
+    .card-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.3px;
+    }
+    .card-badge.positive { background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,214,143,0.3); }
+    .card-badge.negative { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,77,106,0.3); }
+    .card-badge.neutral { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(77,158,255,0.3); }
+    .card-badge.warning { background: var(--yellow-dim); color: var(--yellow); border: 1px solid rgba(240,185,11,0.3); }
 
     /* ── Error banner ── */
     .banner {
       padding: 10px 14px;
-      border-radius: var(--radius);
-      font-size: 13px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      line-height: 1.5;
+      animation: slideIn 0.3s ease;
     }
-    .banner.error { background: rgba(255,77,106,0.12); border: 1px solid rgba(255,77,106,0.35); color: var(--red); }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .banner.error {
+      background: var(--red-dim);
+      border: 1px solid rgba(255,77,106,0.3);
+      color: var(--red);
+    }
+    .banner.success {
+      background: var(--green-dim);
+      border: 1px solid rgba(0,214,143,0.3);
+      color: var(--green);
+    }
+    .banner.info {
+      background: var(--blue-dim);
+      border: 1px solid rgba(77,158,255,0.3);
+      color: var(--blue);
+    }
     .hidden { display: none !important; }
 
     /* ── Goal card ── */
-    .goal-card { position: relative; }
-    #goal-status-badge {
-      position: absolute;
-      top: 16px;
-      right: 18px;
-      font-size: 12px;
-      font-weight: 700;
-      padding: 2px 10px;
-      border-radius: 20px;
-    }
-    #goal-status-badge.achieved { background: rgba(0,214,143,0.15); color: var(--green); border: 1px solid rgba(0,214,143,0.4); }
-    #goal-status-badge.expired  { background: rgba(255,77,106,0.15); color: var(--red);   border: 1px solid rgba(255,77,106,0.4); }
-    #goal-status-badge.running  { background: rgba(77,158,255,0.15); color: var(--blue);  border: 1px solid rgba(77,158,255,0.4); }
-
+    .goal-equity { font-family: var(--font-mono); font-size: 28px; font-weight: 700; }
+    .goal-equity.positive { color: var(--green); }
+    .goal-equity.neutral { color: var(--blue); }
     .progress-track {
-      height: 10px;
-      background: #1e1e30;
-      border-radius: 5px;
+      height: 6px;
+      background: #1a1a35;
+      border-radius: 3px;
       overflow: hidden;
-      margin-bottom: 10px;
+      margin: 10px 0;
     }
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, var(--blue), var(--green));
-      border-radius: 5px;
-      transition: width 0.5s ease;
+      border-radius: 3px;
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
       width: 0%;
+      background: linear-gradient(90deg, var(--blue), var(--purple));
     }
     .goal-stats {
       display: flex;
-      gap: 16px;
+      gap: 20px;
       flex-wrap: wrap;
       align-items: baseline;
     }
-    #goal-equity { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--green); }
-    #goal-pct    { font-family: var(--font-mono); font-size: 16px; color: var(--blue); }
-    #goal-time   { font-size: 13px; color: var(--muted); }
+    .goal-stat { font-size: 12px; color: var(--text-muted); }
+    .goal-stat strong { color: var(--text); font-weight: 600; }
 
     /* ── Metrics grid ── */
     .metrics-grid {
@@ -141,130 +259,301 @@
       gap: 14px;
     }
     @media (max-width: 600px) { .metrics-grid { grid-template-columns: 1fr 1fr; } }
-    .metric-value { font-family: var(--font-mono); font-size: 24px; font-weight: 700; }
+    .metric {
+      text-align: center;
+      padding: 8px;
+    }
+    .metric-label { font-size: 10px; font-weight: 600; letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+    .metric-value { font-family: var(--font-mono); font-size: 22px; font-weight: 700; }
     .metric-value.positive { color: var(--green); }
     .metric-value.negative { color: var(--red); }
-    .metric-value.active   { color: var(--red); }
-    .metric-value.off      { color: var(--green); }
-    .metric-unit { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .metric-value.active { color: var(--red); text-shadow: 0 0 12px rgba(255,77,106,0.4); animation: pulse 2s infinite; }
+    .metric-value.off { color: var(--green); }
+    .metric-unit { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
 
-    /* ── Risk grid ── */
+    /* ── Risk bars ── */
     .risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    @media (max-width: 480px) { .risk-grid { grid-template-columns: 1fr; } }
-    .risk-track { height: 6px; background: #1e1e30; border-radius: 3px; overflow: hidden; margin: 6px 0 4px; }
-    .risk-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; width: 0%; background: var(--blue); }
+    .risk-track { height: 5px; background: #1a1a35; border-radius: 3px; overflow: hidden; margin: 6px 0; }
+    .risk-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease, background 0.3s ease; width: 0%; }
+    .risk-fill.safe { background: var(--green); }
     .risk-fill.warning { background: var(--yellow); }
-    .risk-fill.danger  { background: var(--red); }
-    .risk-val   { font-family: var(--font-mono); font-size: 20px; font-weight: 700; }
-    .risk-limit { font-size: 11px; color: var(--muted); }
+    .risk-fill.danger { background: var(--red); box-shadow: 0 0 8px rgba(255,77,106,0.4); }
+    .risk-val { font-family: var(--font-mono); font-size: 18px; font-weight: 700; }
+    .risk-limit { font-size: 11px; color: var(--text-muted); }
 
-    /* ── Variants table ── */
-    table { width: 100%; border-collapse: collapse; }
-    th { font-size: 11px; font-weight: 600; color: var(--muted); text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-    td { font-family: var(--font-mono); font-size: 13px; padding: 8px 8px; border-bottom: 1px solid var(--border); }
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 480px; }
+    th {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    td {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 10px 10px;
+      border-bottom: 1px solid rgba(30,30,58,0.5);
+      white-space: nowrap;
+    }
     tr:last-child td { border-bottom: none; }
-    tr.best-variant td:first-child::before { content: '★ '; color: var(--yellow); }
-    td.win   { color: var(--green); }
-    td.loss  { color: var(--red); }
-    td.cb-off    { color: var(--green); }
-    td.cb-active { color: var(--red); }
-    .empty { color: var(--muted); font-size: 13px; font-family: inherit; padding: 12px 8px; }
+    tr:hover td { background: rgba(24,24,48,0.5); }
+    tr.best td:first-child { color: var(--yellow); }
+    tr.best td:first-child::before { content: '★ '; }
+    td.green { color: var(--green); }
+    td.red { color: var(--red); }
+    td.muted { color: var(--text-muted); }
+    .empty-state { text-align: center; padding: 24px !important; color: var(--text-muted); font-family: var(--font) !important; font-size: 13px; }
 
     /* ── Positions list ── */
-    .position-row {
+    .pos-list { display: grid; gap: 6px; }
+    .pos-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: var(--bg-alt);
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      transition: border-color 0.2s;
+    }
+    .pos-item:hover { border-color: var(--border-glow); }
+    .pos-pair { font-family: var(--font-mono); font-weight: 600; font-size: 13px; color: var(--blue); }
+    .pos-details { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+    .pos-venue {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--surface-alt);
+      color: var(--text-muted);
+    }
+
+    /* ── Logs ── */
+    .log-list { max-height: 350px; overflow-y: auto; display: grid; gap: 1px; }
+    .log-entry {
+      display: grid;
+      grid-template-columns: 72px 48px 1fr;
+      gap: 8px;
+      padding: 6px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      align-items: start;
+      transition: background 0.15s;
+    }
+    .log-entry:hover { background: var(--bg-alt); }
+    .log-time { color: var(--text-muted); white-space: nowrap; font-size: 10px; }
+    .log-type {
+      text-transform: uppercase;
+      font-weight: 700;
+      font-size: 9px;
+      letter-spacing: 0.5px;
+      padding: 1px 4px;
+      border-radius: 3px;
+      text-align: center;
+    }
+    .log-type.decision { color: var(--text-muted); background: rgba(107,107,143,0.1); }
+    .log-type.execution { color: var(--blue); background: rgba(77,158,255,0.1); }
+    .log-type.info { color: var(--text-muted); }
+    .log-body { color: var(--text); word-break: break-all; line-height: 1.4; }
+
+    /* ── Sidebar widget styles ── */
+    .wallet-addr {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      word-break: break-all;
+      padding: 6px 8px;
+      background: var(--bg-alt);
+      border-radius: var(--radius-sm);
+    }
+    .balance-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 8px 4px;
-      border-bottom: 1px solid var(--border);
-      font-family: var(--font-mono);
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(30,30,58,0.3);
       font-size: 13px;
     }
-    .position-row:last-child { border-bottom: none; }
-    .pos-pair { font-weight: 600; color: var(--blue); }
-    .pos-detail { color: var(--muted); font-size: 12px; }
+    .balance-row:last-child { border-bottom: none; }
+    .balance-label { color: var(--text-muted); font-size: 12px; }
+    .balance-value { font-family: var(--font-mono); font-weight: 600; }
 
-    /* ── Logs list ── */
-    .log-list { max-height: 320px; overflow-y: auto; }
-    .log-entry {
-      display: grid;
-      grid-template-columns: 80px 60px 1fr;
-      gap: 8px;
-      padding: 5px 4px;
-      border-bottom: 1px solid rgba(37,37,53,0.5);
-      font-size: 12px;
-      font-family: var(--font-mono);
-      align-items: start;
+    /* ── Pending decisions ── */
+    .pending-item {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      transition: border-color 0.2s;
     }
-    .log-entry:last-child { border-bottom: none; }
-    .log-time { color: var(--muted); white-space: nowrap; }
-    .log-type { text-transform: uppercase; font-weight: 600; font-size: 10px; letter-spacing: 0.5px; }
-    .log-type.decision  { color: var(--muted); }
-    .log-type.execution { color: var(--blue); }
-    .log-body { color: var(--text); word-break: break-all; }
-    .log-list::-webkit-scrollbar { width: 4px; }
-    .log-list::-webkit-scrollbar-track { background: transparent; }
-    .log-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .pending-item:hover { border-color: var(--border-glow); }
+    .pending-item.enter { border-left: 3px solid var(--green); }
+    .pending-item.exit { border-left: 3px solid var(--red); }
+    .pending-pair { font-family: var(--font-mono); font-weight: 700; font-size: 13px; }
+    .pending-details { font-size: 11px; color: var(--text-muted); margin: 4px 0 8px; font-family: var(--font-mono); }
+    .pending-actions { display: flex; gap: 6px; }
 
-    /* ── Settings Modal ── */
+    /* ── Pool discovery feed ── */
+    .pool-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 8px;
+      background: var(--bg-alt);
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .pool-mint { color: var(--blue); font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pool-venue {
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: var(--surface-alt);
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .pool-time { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+
+    /* ── Modal ── */
     .modal-backdrop {
       position: fixed; inset: 0; z-index: 100;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(4px);
       display: flex; align-items: center; justify-content: center;
       padding: 20px;
+      animation: fadeIn 0.2s ease;
     }
     .modal-box {
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
+      border: 1px solid var(--border-glow);
+      border-radius: 14px;
+      padding: 28px;
       width: 100%;
-      max-width: 420px;
+      max-width: 440px;
+      animation: scaleIn 0.25s ease;
     }
-    .modal-box h2 { font-size: 18px; margin-bottom: 18px; }
-    .field { margin-bottom: 14px; }
-    .field label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .modal-box h2 { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
     .field input {
       width: 100%;
       background: var(--bg);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
+      border-radius: var(--radius-sm);
       color: var(--text);
       font-size: 14px;
       font-family: var(--font-mono);
-      padding: 9px 12px;
+      padding: 10px 12px;
       outline: none;
-      transition: border-color 0.15s;
+      transition: border-color 0.2s;
     }
-    .field input:focus { border-color: var(--blue); }
-    .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
-    .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .field input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(77,158,255,0.1); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 22px; justify-content: flex-end; }
+    .hint { font-size: 11px; color: var(--text-muted); margin-top: 5px; line-height: 1.4; }
+
+    /* ── Loading shimmer ── */
+    .shimmer {
+      background: linear-gradient(90deg, var(--surface) 25%, var(--surface-alt) 50%, var(--surface) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: var(--radius-sm);
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .shimmer-line { height: 14px; margin: 6px 0; width: 60%; }
+    .shimmer-line.wide { width: 80%; }
+
+    /* ── Toast notifications ── */
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 200;
+      display: grid;
+      gap: 8px;
+    }
+    .toast {
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      animation: slideInRight 0.3s ease;
+      max-width: 360px;
+    }
+    @keyframes slideInRight {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .toast.success { background: var(--green-dim); border: 1px solid rgba(0,214,143,0.3); color: var(--green); }
+    .toast.error { background: var(--red-dim); border: 1px solid rgba(255,77,106,0.3); color: var(--red); }
+    .toast.info { background: var(--blue-dim); border: 1px solid rgba(77,158,255,0.3); color: var(--blue); }
+
+    /* ── Responsive ── */
+    @media (max-width: 480px) {
+      header { padding: 10px 14px; }
+      .logo { font-size: 15px; }
+      main { padding: 12px; gap: 12px; }
+      .card { padding: 12px 14px; }
+      .goal-equity { font-size: 22px; }
+      .metric-value { font-size: 18px; }
+      .risk-grid { grid-template-columns: 1fr; }
+      .modal-box { padding: 20px; }
+    }
   </style>
 </head>
 <body>
+
+<div class="bg-grid"></div>
+
+<!-- Toasts -->
+<div id="toast-container" class="toast-container"></div>
 
 <!-- Settings Modal -->
 <div id="settings-modal" class="modal-backdrop hidden">
   <div class="modal-box">
     <h2>⚙ Connect to SniperBot</h2>
     <div class="field">
-      <label>Server URL <span style="font-weight:400;color:var(--muted)">(primary)</span></label>
+      <label>Server URL</label>
       <input id="inp-url" type="url" placeholder="http://localhost:3000" autocomplete="off" spellcheck="false">
-      <p class="hint" aria-label="Example URLs: http://192.168.1.x:3000 locally, or https://your-app.up.railway.app on Railway">e.g. <code>http://192.168.1.x:3000</code> locally, or <code>https://your-app.up.railway.app</code> on Railway</p>
+      <p class="hint">Your bot's address — e.g. <code>http://localhost:3000</code> locally, or <code>https://your-app.up.railway.app</code></p>
     </div>
     <div class="field">
-      <label>Fallback Server URL <span style="font-weight:400;color:var(--muted)">(optional — used automatically if the primary is unreachable)</span></label>
+      <label>Fallback URL <span style="font-weight:400">(optional)</span></label>
       <input id="inp-url-fallback" type="url" placeholder="https://abcd-1234.trycloudflare.com" autocomplete="off" spellcheck="false">
-      <p class="hint">e.g. a second tunnel to the same bot, such as a Cloudflare quick tunnel alongside a primary ngrok URL</p>
+      <p class="hint">Secondary tunnel URL used automatically if primary is unreachable</p>
     </div>
     <div class="field">
-      <label>Secret Key <span style="font-weight:400;color:var(--muted)">(optional — set <code>DASHBOARD_SECRET_KEY</code> on the server)</span></label>
-      <input id="inp-key" type="password" placeholder="Leave blank to use wallet sign-in" autocomplete="off" spellcheck="false">
+      <label>Secret Key <span style="font-weight:400">(or use wallet sign-in)</span></label>
+      <input id="inp-key" type="password" placeholder="Leave blank for wallet auth" autocomplete="off" spellcheck="false">
+      <p class="hint">Set this as <code>DASHBOARD_SECRET_KEY</code> on the server, or leave blank to connect with Phantom/Solflare</p>
     </div>
-    <div id="modal-error" class="banner error hidden" style="margin-bottom:12px"></div>
+    <div id="modal-error" class="banner error hidden"></div>
     <div class="modal-actions">
-      <button id="btn-cancel" class="danger">Cancel</button>
-      <button id="btn-save" class="primary">Save &amp; Connect</button>
+      <button id="btn-cancel" class="btn btn-ghost">Cancel</button>
+      <button id="btn-save" class="btn btn-primary">Save &amp; Connect</button>
     </div>
   </div>
 </div>
@@ -272,168 +561,256 @@
 <!-- App Shell -->
 <header>
   <div class="header-left">
-    <span class="logo">🎯 SniperBot</span>
-    <span id="status-dot" class="dot"></span>
-    <span id="status-text" style="font-size:12px;color:var(--muted)">Not connected</span>
+    <span class="logo"><span class="logo-icon">🎯</span> SniperBot</span>
+    <div class="conn-status">
+      <span id="conn-dot" class="conn-dot"></span>
+      <span id="conn-text">Not connected</span>
+    </div>
   </div>
   <div class="header-right">
     <span id="last-update"></span>
-    <button id="btn-refresh" title="Refresh now">↺ Refresh</button>
-    <button id="btn-settings">⚙ Settings</button>
+    <button id="btn-refresh" class="btn btn-sm btn-ghost" title="Refresh now">↻ Refresh</button>
+    <button id="btn-settings" class="btn btn-sm">⚙ Settings</button>
   </div>
 </header>
 
 <main>
-  <div id="error-banner" class="banner error hidden"></div>
+  <!-- Main Column -->
+  <div class="col-main">
+    <!-- Error banner -->
+    <div id="error-banner" class="banner error hidden"></div>
 
-  <!-- Goal Progress -->
-  <div class="card goal-card" id="goal-card">
-    <div class="card-label">Goal Progress · 0.1 → 2.0 SOL in 24 h</div>
-    <div id="goal-status-badge" class="hidden"></div>
-    <div class="progress-track"><div id="goal-fill" class="progress-fill"></div></div>
-    <div class="goal-stats">
-      <span id="goal-equity">— SOL</span>
-      <span style="color:var(--muted)">/&nbsp;2.0 SOL</span>
-      <span id="goal-pct">—%</span>
-      <span id="goal-time"></span>
+    <!-- Goal Progress -->
+    <div class="card" id="goal-card">
+      <div class="card-header">
+        <span class="card-title">Goal Progress</span>
+        <span id="goal-badge" class="card-badge neutral hidden">▶ RUNNING</span>
+      </div>
+      <div class="goal-stats">
+        <span id="goal-equity" class="goal-equity neutral">— SOL</span>
+        <span class="goal-stat">of <strong>2.0 SOL</strong> target</span>
+        <span id="goal-pct" class="goal-stat"><strong>—%</strong></span>
+        <span id="goal-time" class="goal-stat"></span>
+      </div>
+      <div class="progress-track"><div id="goal-fill" class="progress-fill"></div></div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="metrics-grid">
+      <div class="card metric">
+        <div class="metric-label">Bankroll</div>
+        <div id="val-bankroll" class="metric-value">—</div>
+        <div class="metric-unit">SOL</div>
+      </div>
+      <div class="card metric">
+        <div class="metric-label">Realized PnL</div>
+        <div id="val-pnl" class="metric-value">—</div>
+        <div class="metric-unit">SOL</div>
+      </div>
+      <div class="card metric">
+        <div class="metric-label">Circuit Breaker</div>
+        <div id="val-cb" class="metric-value">—</div>
+      </div>
+    </div>
+
+    <!-- Risk Gauges -->
+    <div class="risk-grid">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Drawdown</span><span class="risk-limit">max 50%</span></div>
+        <div class="risk-track"><div id="bar-drawdown" class="risk-fill safe"></div></div>
+        <div id="val-drawdown" class="risk-val">—</div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Daily Loss</span><span class="risk-limit">max 50%</span></div>
+        <div class="risk-track"><div id="bar-daily" class="risk-fill safe"></div></div>
+        <div id="val-daily" class="risk-val">—</div>
+      </div>
+    </div>
+
+    <!-- Strategy Variants -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Strategy Variants</span>
+        <span id="variant-count" class="card-badge neutral" style="display:none"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Variant</th>
+              <th>Equity</th>
+              <th>W / L</th>
+              <th>Win %</th>
+              <th>Avg PnL</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="variants-body">
+            <tr><td class="empty-state" colspan="6">No strategy data yet — bot just started</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Open Positions -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Open Positions</span>
+        <span id="pos-count" class="card-badge neutral" style="display:none">0</span>
+      </div>
+      <div id="positions-list">
+        <p class="empty-state" style="padding:16px">No open positions</p>
+      </div>
+    </div>
+
+    <!-- Recent Logs -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Activity Log</span>
+        <span id="log-count" class="card-badge neutral" style="display:none">0</span>
+      </div>
+      <div id="logs-list" class="log-list">
+        <p class="empty-state" style="padding:16px">No activity yet</p>
+      </div>
     </div>
   </div>
 
-  <!-- Metrics -->
-  <div class="metrics-grid">
+  <!-- Sidebar -->
+  <div class="col-side">
+    <!-- Wallet Status -->
     <div class="card">
-      <div class="card-label">Bankroll</div>
-      <div id="val-bankroll" class="metric-value">—</div>
-      <div class="metric-unit">SOL</div>
+      <div class="card-header">
+        <span class="card-title">Wallet</span>
+      </div>
+      <div class="wallet-addr" id="wallet-addr">CQf2TBVCtKAjJw1mEGpEYPVn7MUgGJ87wP4esHJhftsF</div>
+      <div style="margin-top:8px">
+        <div class="balance-row">
+          <span class="balance-label">Balance</span>
+          <span class="balance-value" id="wallet-balance">— SOL</span>
+        </div>
+        <div class="balance-row">
+          <span class="balance-label">Available</span>
+          <span class="balance-value" id="wallet-available">— SOL</span>
+        </div>
+        <div class="balance-row">
+          <span class="balance-label">Reserved</span>
+          <span class="balance-value" style="color:var(--text-muted)">0.05 SOL</span>
+        </div>
+        <div class="balance-row">
+          <span class="balance-label">Max Trade</span>
+          <span class="balance-value" id="wallet-max-trade" style="color:var(--blue)">0.25 SOL</span>
+        </div>
+      </div>
     </div>
-    <div class="card">
-      <div class="card-label">Realized PnL</div>
-      <div id="val-pnl" class="metric-value">—</div>
-      <div class="metric-unit">SOL</div>
-    </div>
-    <div class="card">
-      <div class="card-label">Circuit Breaker</div>
-      <div id="val-cb" class="metric-value">—</div>
-    </div>
-  </div>
 
-  <!-- Risk -->
-  <div class="risk-grid">
-    <div class="card">
-      <div class="card-label">Drawdown</div>
-      <div class="risk-track"><div id="bar-drawdown" class="risk-fill"></div></div>
-      <div id="val-drawdown" class="risk-val">—</div>
-      <div class="risk-limit">max 15%</div>
+    <!-- Pending Decisions -->
+    <div class="card" id="pending-card">
+      <div class="card-header">
+        <span class="card-title">Pending Decisions</span>
+        <span id="pending-count" class="card-badge warning" style="display:none">0</span>
+      </div>
+      <div id="pending-list">
+        <p class="empty-state" style="padding:12px">No pending decisions</p>
+      </div>
     </div>
+
+    <!-- Pool Discovery -->
     <div class="card">
-      <div class="card-label">Daily Loss</div>
-      <div class="risk-track"><div id="bar-daily" class="risk-fill"></div></div>
-      <div id="val-daily" class="risk-val">—</div>
-      <div class="risk-limit">max 10%</div>
+      <div class="card-header">
+        <span class="card-title">Pool Discovery</span>
+        <span id="pool-count" class="card-badge neutral" style="display:none">0</span>
+      </div>
+      <div id="pool-list" style="display:grid;gap:5px">
+        <p class="empty-state" style="padding:12px">No pools discovered yet</p>
+      </div>
     </div>
-  </div>
-
-  <!-- Strategy Variants -->
-  <div class="card">
-    <div class="card-label">Strategy Variants</div>
-    <table>
-      <thead>
-        <tr>
-          <th>Variant</th>
-          <th>Equity (SOL)</th>
-          <th>W / L</th>
-          <th>Win %</th>
-          <th>Avg PnL %</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody id="variants-body">
-        <tr><td class="empty" colspan="6" style="font-family:inherit">No data yet</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Open Positions -->
-  <div class="card">
-    <div class="card-label">Open Positions (<span id="pos-count">0</span>)</div>
-    <div id="positions-list"><p class="empty">No open positions</p></div>
-  </div>
-
-  <!-- Recent Logs -->
-  <div class="card">
-    <div class="card-label">Recent Logs</div>
-    <div id="logs-list" class="log-list"><p class="empty">No logs yet</p></div>
   </div>
 </main>
 
 <script>
-  /* ── Storage keys ── */
+  /* ──────────────── Storage keys ──────────────── */
   const KEY_URL = 'sb_server_url';
   const KEY_URL_FALLBACK = 'sb_server_url_fallback';
   const KEY_SESSION = 'sb_wallet_session';
 
-  /* ── State ── */
+  /* ──────────────── State ──────────────── */
   let serverUrl = '';
   let fallbackUrl = '';
-  let activeUrl = '';       // whichever of serverUrl/fallbackUrl last succeeded
-  let activeSource = '';    // 'primary' | 'fallback'
+  let activeUrl = '';
+  let activeSource = 'primary';
   let secretKey = '';
   let sessionToken = '';
   let refreshTimer = null;
-  let lastFetchAt = null;
+  let prevDecisions = [];
+  let poolHistory = [];
 
-  /* ── DOM refs ── */
+  /* ──────────────── DOM refs ──────────────── */
   const $ = (id) => document.getElementById(id);
-  const modal     = $('settings-modal');
+  const modal = $('settings-modal');
   const btnSettings = $('btn-settings');
-  const btnSave   = $('btn-save');
+  const btnSave = $('btn-save');
   const btnCancel = $('btn-cancel');
   const btnRefresh = $('btn-refresh');
-  const inpUrl    = $('inp-url');
+  const inpUrl = $('inp-url');
   const inpUrlFallback = $('inp-url-fallback');
-  const inpKey    = $('inp-key');
-  const modalErr  = $('modal-error');
+  const inpKey = $('inp-key');
+  const modalErr = $('modal-error');
   const errBanner = $('error-banner');
-  const statusDot = $('status-dot');
-  const statusTxt = $('status-text');
-  const lastUpd   = $('last-update');
+  const connDot = $('conn-dot');
+  const connText = $('conn-text');
 
-  /* ── Helpers ── */
-  function fmt(n, digits = 6) {
-    if (n == null) return '—';
-    return Number(n).toFixed(digits);
+  /* ──────────────── Helpers ──────────────── */
+  function fmt(n, d = 6) {
+    if (n == null || isNaN(n)) return '—';
+    return Number(n).toFixed(d);
   }
   function fmtPct(n) {
-    if (n == null) return '—';
+    if (n == null || isNaN(n)) return '—';
     return (Number(n) * 100).toFixed(2) + '%';
   }
   function fmtMs(ms) {
     if (ms == null || ms <= 0) return '0h 0m';
-    const h = Math.floor(ms / 3_600_000);
-    const m = Math.floor((ms % 3_600_000) / 60_000);
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
     return `${h}h ${m}m`;
   }
-  function setStatus(state, text) {
-    statusDot.className = 'dot ' + state;
-    statusTxt.textContent = text;
+  function fmtAddr(addr) {
+    if (!addr || addr.length < 12) return addr || '—';
+    return addr.slice(0, 4) + '...' + addr.slice(-6);
+  }
+  function fmtTime(ts) {
+    if (!ts) return '—';
+    const d = new Date(ts);
+    return d.toLocaleTimeString();
+  }
+  function setConn(state, text) {
+    connDot.className = 'conn-dot ' + state;
+    connText.textContent = text || 'Unknown';
   }
   function setError(msg) {
     if (msg) { errBanner.textContent = msg; errBanner.classList.remove('hidden'); }
-    else      { errBanner.classList.add('hidden'); }
+    else { errBanner.classList.add('hidden'); }
   }
 
-  /* ── Settings ── */
+  /* ──────────────── Toast ──────────────── */
+  function toast(message, type = 'info') {
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.textContent = message;
+    $('toast-container').appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+  }
+
+  /* ──────────────── Settings ──────────────── */
   function loadSettings() {
     serverUrl = localStorage.getItem(KEY_URL) || '';
     fallbackUrl = localStorage.getItem(KEY_URL_FALLBACK) || '';
     activeUrl = serverUrl;
     activeSource = 'primary';
-    // Secret key is never persisted — users must re-enter it each session for security.
     secretKey = '';
     sessionToken = sessionStorage.getItem(KEY_SESSION) || '';
   }
   function saveSettings() {
-    const prevUrl = serverUrl;
     serverUrl = inpUrl.value.trim().replace(/\/$/, '');
     fallbackUrl = inpUrlFallback.value.trim().replace(/\/$/, '');
     secretKey = inpKey.value.trim();
@@ -442,11 +819,7 @@
     else localStorage.removeItem(KEY_URL_FALLBACK);
     activeUrl = serverUrl;
     activeSource = 'primary';
-    // Secret key is intentionally NOT stored in any Web Storage API.
-    if (prevUrl && serverUrl !== prevUrl) {
-      // Server URL changed; invalidate any session from the old server
-      clearWalletSession();
-    }
+    clearWalletSession();
   }
   function clearWalletSession() {
     sessionToken = '';
@@ -455,318 +828,340 @@
   function isRailwayConsoleUrl(url) {
     return /^https?:\/\/(?:www\.)?railway\.com\/project\//i.test(url);
   }
-  function isVercelFrontendUrl(url) {
-    return /^https?:\/\/[^/]+\.vercel\.app\b/i.test(url);
-  }
   function openModal() {
-    // Only pre-fill with origin when it is not a Vercel frontend — on Vercel the
-    // user must supply their Railway (or other) backend URL manually.
-    const originDefault = isVercelFrontendUrl(window.location.origin) ? '' : window.location.origin;
-    inpUrl.value = serverUrl || originDefault;
+    inpUrl.value = serverUrl || (window.location.origin.includes('vercel') ? '' : window.location.origin);
     inpUrlFallback.value = fallbackUrl || '';
-    inpKey.value = secretKey || '';
+    inpKey.value = '';
     modalErr.classList.add('hidden');
-    const BACKEND_URL_HINT = 'Enter the URL where your SniperBot backend is running, e.g. https://your-app.up.railway.app';
-    // If the saved URL is a Railway project management URL, warn the user immediately.
     if (isRailwayConsoleUrl(serverUrl)) {
-      modalErr.textContent =
-        'The saved URL is a Railway project management URL, not your deployed service URL. ' +
-        'Enter the public domain assigned to your service, e.g. https://your-app.up.railway.app';
-      modalErr.classList.remove('hidden');
-    }
-    // If the saved URL is a Vercel frontend URL, warn the user immediately.
-    if (isVercelFrontendUrl(serverUrl)) {
-      modalErr.textContent =
-        'The saved URL is a Vercel frontend URL, not a running bot backend. ' + BACKEND_URL_HINT;
-      modalErr.classList.remove('hidden');
-    }
-    // When hosted on Vercel with no saved URL configured, guide the user.
-    if (!serverUrl && isVercelFrontendUrl(window.location.origin)) {
-      modalErr.textContent = BACKEND_URL_HINT;
+      modalErr.textContent = 'That\'s a Railway project management URL, not your deployed service. Use the public domain assigned to your service, e.g. https://your-app.up.railway.app';
       modalErr.classList.remove('hidden');
     }
     modal.classList.remove('hidden');
     inpUrl.focus();
   }
   function closeModal() { modal.classList.add('hidden'); }
+
+  /* ──────────────── Wallet auth ──────────────── */
   function getWalletProvider() {
     return window.phantom?.solana || window.solana || null;
   }
   function bytesToBase64(bytes) {
-    let binary = '';
-    const chunkSize = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
-    }
-    return btoa(binary);
+    let bin = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode(...bytes.slice(i, i + chunk));
+    return btoa(bin);
   }
   async function connectWalletSession() {
     const provider = getWalletProvider();
-    if (!provider) {
-      throw new Error('No Solana wallet found. Install Phantom or another Solana wallet extension.');
-    }
-    if (typeof provider.connect !== 'function' || typeof provider.signMessage !== 'function') {
-      throw new Error('The connected wallet does not support message signing.');
-    }
+    if (!provider) throw new Error('No Solana wallet found. Install Phantom or Solflare.');
+    if (typeof provider.connect !== 'function' || typeof provider.signMessage !== 'function')
+      throw new Error('Wallet does not support message signing.');
 
     const connected = await provider.connect();
-    const walletAddress = connected?.publicKey?.toString?.() || provider.publicKey?.toString?.();
-    if (!walletAddress) {
-      throw new Error('Wallet connection failed.');
-    }
+    const walletAddr = connected?.publicKey?.toString?.() || provider.publicKey?.toString?.();
+    if (!walletAddr) throw new Error('Wallet connection failed.');
 
-    const challengeRes = await fetch(serverUrl + '/auth/challenge?wallet=' + encodeURIComponent(walletAddress));
-    const challengeBodyText = await challengeRes.text().catch(() => '');
-    let challengeBody = {};
-    try { challengeBody = JSON.parse(challengeBodyText); } catch (_) {}
-    if (!challengeRes.ok) {
-      const contentType = challengeRes.headers.get('content-type') || '';
-      const isHtml = contentType.includes('text/html') ||
-                     /^<!DOCTYPE\b|^<html\b/i.test(challengeBodyText.trim());
-      const bodyPreview = challengeBodyText.trim().slice(0, 150);
-      throw new Error(
-        challengeBody.error ||
-        (isHtml
-          ? 'Server returned an unexpected HTML response — make sure the Server URL points to your running SniperBot backend, not the Vercel frontend'
-          : bodyPreview
-            ? `Server error (HTTP ${challengeRes.status}): ${bodyPreview}`
-            : `Failed to create wallet challenge (HTTP ${challengeRes.status})`)
-      );
-    }
+    const chalRes = await fetch(serverUrl + '/auth/challenge?wallet=' + encodeURIComponent(walletAddr));
+    const chalText = await chalRes.text().catch(() => '');
+    let chalBody = {};
+    try { chalBody = JSON.parse(chalText); } catch (_) {}
+    if (!chalRes.ok) throw new Error(chalBody.error || 'Wallet challenge failed (HTTP ' + chalRes.status + ')');
 
-    const messageBytes = new TextEncoder().encode(challengeBody.message);
-    const signed = await provider.signMessage(messageBytes, 'utf8');
-    const signatureBytes = signed?.signature || signed;
+    const msgBytes = new TextEncoder().encode(chalBody.message);
+    const signed = await provider.signMessage(msgBytes, 'utf8');
+    const sigBytes = signed?.signature || signed;
     const verifyRes = await fetch(serverUrl + '/auth/verify', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        challengeId: challengeBody.challengeId,
-        walletAddress,
-        signature: bytesToBase64(signatureBytes)
-      })
+      body: JSON.stringify({ challengeId: chalBody.challengeId, walletAddress: walletAddr, signature: bytesToBase64(sigBytes) })
     });
     const verifyBody = await verifyRes.json().catch(() => ({}));
-    if (!verifyRes.ok || !verifyBody.token) {
-      throw new Error(verifyBody.error || 'Wallet verification failed');
-    }
-
+    if (!verifyRes.ok || !verifyBody.token) throw new Error(verifyBody.error || 'Wallet verification failed');
     sessionToken = verifyBody.token;
     sessionStorage.setItem(KEY_SESSION, sessionToken);
   }
 
-  /* ── Fetch ── */
+  /* ──────────────── Fetch ──────────────── */
   function authHeaders() {
-    const headers = {};
-    if (secretKey) headers['x-secret-key'] = secretKey;
-    else if (sessionToken) headers.authorization = 'Bearer ' + sessionToken;
-    return headers;
+    const h = {};
+    if (secretKey) h['x-secret-key'] = secretKey;
+    else if (sessionToken) h.authorization = 'Bearer ' + sessionToken;
+    return h;
   }
-  const FETCH_TIMEOUT_MS = 4000;
+  const FETCH_TIMEOUT = 4500;
 
   async function fetchFromUrl(url) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT);
     try {
-      const res = await fetch(url + '/summary', { headers: authHeaders(), signal: controller.signal });
+      const res = await fetch(url + '/summary', { headers: authHeaders(), signal: ctrl.signal });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        const error = new Error(body.error || 'HTTP ' + res.status);
-        error.httpStatus = res.status;
-        throw error;
+        const err = new Error(body.error || 'HTTP ' + res.status);
+        err.httpStatus = res.status;
+        throw err;
       }
       return await res.json();
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    } finally { clearTimeout(tid); }
   }
 
-  /**
-   * Tries the primary Server URL first; if it's unreachable (network error,
-   * timeout) and a Fallback Server URL is configured, transparently retries
-   * against that instead. Auth errors (401) are NOT treated as a reason to
-   * fail over — that's a configuration problem the fallback would hit too,
-   * and surfacing it clearly (rather than masking it behind a fallback
-   * attempt) is more useful. Because the primary is always tried first on
-   * every poll, this also self-heals back to the primary as soon as it's
-   * reachable again — no manual "switch back" step needed.
-   */
   async function fetchSummary() {
-    if (!serverUrl) throw new Error('Server URL is not configured');
+    if (!serverUrl) throw new Error('Server URL not configured');
     try {
       const data = await fetchFromUrl(serverUrl);
-      activeUrl = serverUrl;
-      activeSource = 'primary';
+      activeUrl = serverUrl; activeSource = 'primary';
       return data;
-    } catch (primaryError) {
-      const isAuthError = primaryError.httpStatus === 401;
-      if (!fallbackUrl || isAuthError) throw primaryError;
+    } catch (e) {
+      if (e.httpStatus === 401 || !fallbackUrl) throw e;
       try {
         const data = await fetchFromUrl(fallbackUrl);
-        activeUrl = fallbackUrl;
-        activeSource = 'fallback';
+        activeUrl = fallbackUrl; activeSource = 'fallback';
         return data;
-      } catch (fallbackError) {
-        throw new Error(primaryError.message + ' (fallback also failed: ' + fallbackError.message + ')');
+      } catch (e2) {
+        throw new Error(e.message + ' (fallback: ' + e2.message + ')');
       }
     }
   }
 
-  /* ── Render ── */
+  async function fetchJson(url) {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT);
+    try {
+      const res = await fetch(url, { headers: authHeaders(), signal: ctrl.signal });
+      return await res.json();
+    } finally { clearTimeout(tid); }
+  }
+
+  /* ──────────────── Render ──────────────── */
   function render(d) {
     /* Goal */
     const gs = d.goalStatus;
     if (gs) {
       const pct = Math.min(1, gs.progress || 0);
       $('goal-fill').style.width = (pct * 100).toFixed(1) + '%';
-      $('goal-equity').textContent = fmt(gs.equity, 4) + ' SOL';
-      $('goal-pct').textContent    = (pct * 100).toFixed(1) + '%';
-      $('goal-time').textContent   = gs.stop
+      const eqEl = $('goal-equity');
+      eqEl.textContent = fmt(gs.equity, 4) + ' SOL';
+      eqEl.className = 'goal-equity ' + (gs.achieved ? 'positive' : 'neutral');
+      $('goal-pct').innerHTML = '<strong>' + (pct * 100).toFixed(1) + '%</strong> complete';
+      $('goal-time').textContent = gs.stop
         ? (gs.achieved ? '🏁 Goal achieved!' : '⏰ Time expired')
         : fmtMs(gs.timeRemainingMs) + ' remaining';
-      const badge = $('goal-status-badge');
-      badge.classList.remove('hidden', 'achieved', 'expired', 'running');
-      if (gs.achieved)      { badge.classList.add('achieved'); badge.textContent = '✓ ACHIEVED'; }
-      else if (gs.expired)  { badge.classList.add('expired');  badge.textContent = '✗ EXPIRED'; }
-      else                  { badge.classList.add('running');  badge.textContent = '▶ RUNNING'; }
+      const badge = $('goal-badge');
+      badge.classList.remove('hidden', 'positive', 'negative', 'neutral', 'warning');
+      if (gs.achieved) { badge.classList.add('positive'); badge.textContent = '✓ ACHIEVED'; }
+      else if (gs.expired) { badge.classList.add('negative'); badge.textContent = '✗ EXPIRED'; }
+      else { badge.classList.add('neutral'); badge.textContent = '▶ RUNNING'; }
     }
 
     /* Metrics */
     const bankroll = d.bankrollSol;
-    const pnl      = d.realizedPnlSol;
-    const cb       = d.strategyHealth?.circuitBreaker;
+    const pnl = d.realizedPnlSol;
+    const sh = d.strategyHealth || {};
+    const cb = sh.circuitBreaker;
+
     $('val-bankroll').textContent = fmt(bankroll, 4);
-    $('val-bankroll').className   = 'metric-value';
+    $('val-bankroll').className = 'metric-value';
 
     const pnlEl = $('val-pnl');
     pnlEl.textContent = pnl == null ? '—' : (pnl >= 0 ? '+' : '') + fmt(pnl, 4);
-    const pnlClass = pnl == null ? '' : pnl >= 0 ? ' positive' : ' negative';
-    pnlEl.className   = 'metric-value' + pnlClass;
+    pnlEl.className = 'metric-value ' + (pnl == null ? '' : pnl >= 0 ? 'positive' : 'negative');
 
     const cbEl = $('val-cb');
     cbEl.textContent = cb ? 'ACTIVE' : 'OFF';
-    cbEl.className   = 'metric-value ' + (cb ? 'active' : 'off');
+    cbEl.className = 'metric-value ' + (cb ? 'active' : 'off');
 
     /* Risk */
-    const dd  = (d.strategyHealth?.drawdownPct || 0);
-    const dl  = (d.strategyHealth?.dailyLossPct || 0);
+    const dd = sh.drawdownPct || 0;
+    const dl = sh.dailyLossPct || 0;
+    const maxDD = 0.50;
+    const maxDL = 0.50;
 
     $('val-drawdown').textContent = fmtPct(dd);
     const ddBar = $('bar-drawdown');
-    ddBar.style.width = Math.min(dd / 0.15 * 100, 100).toFixed(1) + '%';
-    ddBar.className = 'risk-fill' + (dd >= 0.12 ? ' danger' : dd >= 0.08 ? ' warning' : '');
+    ddBar.style.width = Math.min(dd / maxDD * 100, 100).toFixed(1) + '%';
+    ddBar.className = 'risk-fill ' + (dd >= maxDD * 0.8 ? 'danger' : dd >= maxDD * 0.5 ? 'warning' : 'safe');
 
     $('val-daily').textContent = fmtPct(dl);
     const dlBar = $('bar-daily');
-    dlBar.style.width = Math.min(dl / 0.10 * 100, 100).toFixed(1) + '%';
-    dlBar.className = 'risk-fill' + (dl >= 0.08 ? ' danger' : dl >= 0.05 ? ' warning' : '');
+    dlBar.style.width = Math.min(dl / maxDL * 100, 100).toFixed(1) + '%';
+    dlBar.className = 'risk-fill ' + (dl >= maxDL * 0.8 ? 'danger' : dl >= maxDL * 0.5 ? 'warning' : 'safe');
+
+    /* Wallet sidebar */
+    $('wallet-balance').textContent = fmt(bankroll, 4) + ' SOL';
+    const available = Math.max(0, (bankroll || 0) - 0.05);
+    $('wallet-available').textContent = fmt(available, 4) + ' SOL';
+    $('wallet-max-trade').textContent = fmt(Math.min(available * 0.15, 0.25), 4) + ' SOL';
 
     /* Variants */
     const variants = d.variantSummary;
     const vtbody = $('variants-body');
     if (variants && variants.length) {
-      vtbody.innerHTML = variants.map((v, i) => {
+      const sorted = [...variants].sort((a, b) => (b.equity || 0) - (a.equity || 0));
+      vtbody.innerHTML = sorted.map((v, i) => {
         const total = (v.wins || 0) + (v.losses || 0);
         const wr = total > 0 ? ((v.wins / total) * 100).toFixed(0) + '%' : '—';
         const avgPnl = v.avgPnlPct != null ? (v.avgPnlPct * 100).toFixed(1) + '%' : '—';
-        return `<tr class="${i === 0 ? 'best-variant' : ''}">
+        return `<tr class="${i === 0 ? 'best' : ''}">
           <td>${v.name}</td>
           <td>${fmt(v.equity, 4)}</td>
-          <td><span class="${(v.wins||0)>0?'win':''}">${v.wins||0}</span> / <span class="${(v.losses||0)>0?'loss':''}">${v.losses||0}</span></td>
+          <td><span class="${(v.wins||0)>0?'green':''}">${v.wins||0}</span> / <span class="${(v.losses||0)>0?'red':''}">${v.losses||0}</span></td>
           <td>${wr}</td>
-          <td class="${v.avgPnlPct>=0?'win':'loss'}">${avgPnl}</td>
-          <td class="${v.circuitBreaker?'cb-active':'cb-off'}">${v.circuitBreaker?'CB ACTIVE':'ok'}</td>
+          <td class="${v.avgPnlPct>=0?'green':'red'}">${avgPnl}</td>
+          <td class="${v.circuitBreaker?'red':'green'}">${v.circuitBreaker?'CB ACTIVE':'ok'}</td>
         </tr>`;
       }).join('');
+      const count = $('variant-count');
+      count.style.display = 'inline';
+      count.textContent = variants.length + ' active';
+      count.className = 'card-badge neutral';
     } else {
-      vtbody.innerHTML = '<tr><td class="empty" colspan="6" style="font-family:inherit">No variant data yet</td></tr>';
+      vtbody.innerHTML = '<tr><td class="empty-state" colspan="6">No strategy data yet</td></tr>';
     }
 
     /* Positions */
     const positions = d.openPositions || [];
-    $('pos-count').textContent = positions.length;
+    const posCount = $('pos-count');
+    if (positions.length > 0) {
+      posCount.style.display = 'inline';
+      posCount.textContent = positions.length;
+      posCount.className = 'card-badge ' + (positions.length > 0 ? 'warning' : 'neutral');
+    } else { posCount.style.display = 'none'; }
+
     const posEl = $('positions-list');
     if (positions.length === 0) {
-      posEl.innerHTML = '<p class="empty">No open positions</p>';
+      posEl.innerHTML = '<p class="empty-state" style="padding:16px">No open positions</p>';
     } else {
-      posEl.innerHTML = positions.map((p) => `
-        <div class="position-row">
+      posEl.innerHTML = '<div class="pos-list">' + positions.map(p => `
+        <div class="pos-item">
           <div>
             <span class="pos-pair">${p.pair || '—'}</span>
-            <span class="pos-detail"> · entry ${fmt(p.entryPrice, 4)} · size ${fmt(p.capitalSol, 4)} SOL</span>
+            <span class="pos-details"> · entry ${fmt(p.entryPrice, 6)} · ${fmt(p.capitalSol, 4)} SOL</span>
           </div>
-          <div class="pos-detail">${p.venue || ''}</div>
-        </div>`).join('');
+          ${p.venue ? `<span class="pos-venue">${p.venue}</span>` : ''}
+        </div>`).join('') + '</div>';
     }
 
     /* Logs */
     const logs = d.recentLogs || [];
+    const logCount = $('log-count');
+    if (logs.length > 0) {
+      logCount.style.display = 'inline';
+      logCount.textContent = logs.length;
+    } else { logCount.style.display = 'none'; }
+
     const logsEl = $('logs-list');
     if (logs.length === 0) {
-      logsEl.innerHTML = '<p class="empty">No logs yet</p>';
+      logsEl.innerHTML = '<p class="empty-state" style="padding:16px">No activity yet</p>';
     } else {
-      logsEl.innerHTML = [...logs].reverse().map((log) => {
-        const ts = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '—';
+      logsEl.innerHTML = [...logs].reverse().slice(0, 50).map(log => {
+        const ts = log.timestamp ? fmtTime(log.timestamp) : '—';
         const type = log.type || 'info';
         let body = '';
-        if (log.decision) {
-          body = `[${log.decision.action || '—'}] ${log.opportunity?.pair || ''} ${log.decision.reason || ''}`;
-        } else if (log.execution) {
+        if (log.decision) body = `[${log.decision.action || '—'}] ${log.opportunity?.pair || ''} ${log.decision.reason || ''}`;
+        else if (log.execution) {
           const ex = log.execution;
-          body = `[${log.kind?.toUpperCase() || 'EXEC'}] ${log.opportunity?.pair || log.position?.pair || ''} pnl:${ex.pnlSol!=null?(ex.pnlSol>=0?'+':'')+fmt(ex.pnlSol,4)+' SOL':'—'}`;
-        } else {
-          body = JSON.stringify(log).slice(0, 120);
-        }
+          body = `[${(log.kind||'EXEC').toUpperCase()}] ${log.opportunity?.pair||log.position?.pair||''} pnl:${ex.pnlSol!=null?(ex.pnlSol>=0?'+':'')+fmt(ex.pnlSol,4)+' SOL':'—'}`;
+        } else body = JSON.stringify(log).slice(0, 120);
         return `<div class="log-entry">
           <span class="log-time">${ts}</span>
-          <span class="log-type ${type}">${type}</span>
+          <span class="log-type ${type}">${type.slice(0, 4)}</span>
           <span class="log-body">${body}</span>
+        </div>`;
+      }).join('');
+    }
+
+    /* Pending decisions */
+    const pending = d.decisionHistory?.filter(dh => dh.status === 'pending') || [];
+    const pdRes = d.pendingDecisions || [];
+    const allPending = [...pending, ...pdRes];
+    const pendingCount = $('pending-count');
+    if (allPending.length > 0) {
+      pendingCount.style.display = 'inline';
+      pendingCount.textContent = allPending.length;
+      pendingCount.className = 'card-badge warning';
+    } else { pendingCount.style.display = 'none'; }
+
+    const pdEl = $('pending-list');
+    if (allPending.length === 0) {
+      pdEl.innerHTML = '<p class="empty-state" style="padding:12px">No pending decisions</p>';
+    } else {
+      pdEl.innerHTML = allPending.map(pd => {
+        const kind = pd.kind || 'enter';
+        const pair = pd.opportunity?.pair || pd.pair || '—';
+        const details = pd.decision ? `conf: ${fmt(pd.decision.confidence, 3)} · size: ${fmt(pd.decision.sizeSol, 4)} SOL` : '';
+        return `<div class="pending-item ${kind}" data-id="${pd.id || ''}">
+          <div class="pending-pair" style="color:${kind === 'enter' ? 'var(--green)' : 'var(--red)'}">
+            ${kind === 'enter' ? '▲' : '▼'} ${pair}
+            <span style="font-weight:400;font-size:11px;color:var(--text-muted)">${kind.toUpperCase()}</span>
+          </div>
+          <div class="pending-details">${details}</div>
+          <div class="pending-actions">
+            <button class="btn btn-sm btn-success" onclick="approveDecision('${pd.id || ''}')">✓ Approve</button>
+            <button class="btn btn-sm btn-danger" onclick="rejectDecision('${pd.id || ''}')">✗ Reject</button>
+          </div>
         </div>`;
       }).join('');
     }
   }
 
-  /* ── Refresh cycle ── */
+  /* ──────────────── Decision actions ──────────────── */
+  async function approveDecision(id) {
+    if (!id) return toast('Invalid decision ID', 'error');
+    try {
+      const res = await fetch(activeUrl + '/decisions/approve', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ id })
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Approve failed');
+      toast('Trade approved ✓', 'success');
+      refresh();
+    } catch (e) { toast('Approve failed: ' + e.message, 'error'); }
+  }
+
+  async function rejectDecision(id) {
+    if (!id) return toast('Invalid decision ID', 'error');
+    const reason = prompt('Reason for rejection (optional):') || 'manually-rejected';
+    try {
+      const res = await fetch(activeUrl + '/decisions/reject', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ id, reason })
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Reject failed');
+      toast('Trade rejected ✗', 'info');
+      refresh();
+    } catch (e) { toast('Reject failed: ' + e.message, 'error'); }
+  }
+
+  /* ──────────────── Refresh ──────────────── */
   async function refresh() {
-    if (!serverUrl) { setStatus('', 'Not configured'); return; }
-    // Guard: Railway project management URLs are the web console, not the deployed service.
+    if (!serverUrl) { setConn('', 'Not configured'); return; }
+
     if (isRailwayConsoleUrl(serverUrl)) {
-      setStatus('error', 'Wrong URL');
-      setError(
-        'That looks like a Railway project management URL, not your deployed service URL. ' +
-        'Click ⚙ Settings and enter the public domain assigned to your service, ' +
-        'e.g. https://your-app.up.railway.app'
-      );
+      setConn('error', 'Wrong URL');
+      setError('That looks like a Railway project URL, not your service URL.');
       return;
     }
-    // Guard: Vercel frontend URLs host only the dashboard UI, not the bot backend.
-    if (isVercelFrontendUrl(serverUrl)) {
-      setStatus('error', 'Wrong URL');
-      setError(
-        'That looks like a Vercel frontend URL, not a running bot backend. ' +
-        'Click ⚙ Settings and enter the URL where your SniperBot backend is running, ' +
-        'e.g. https://your-app.up.railway.app'
-      );
-      return;
-    }
-    setStatus('', 'Fetching…');
+
+    setConn('pending', 'Fetching…');
     try {
       const data = await fetchSummary();
       render(data);
-      lastFetchAt = Date.now();
-      setStatus('connected', activeSource === 'fallback' ? 'Live (fallback)' : 'Live');
+      setConn('connected', activeSource === 'fallback' ? 'Live (fallback)' : 'Live');
       setError(null);
-      lastUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
+      $('last-update').textContent = 'Updated ' + new Date().toLocaleTimeString();
     } catch (e) {
       if (/Unauthorized/i.test(e.message) && !secretKey) {
-        const hadSessionToken = Boolean(sessionToken);
         clearWalletSession();
         clearInterval(refreshTimer);
         refreshTimer = null;
-        if (hadSessionToken) openModal();
       }
-      setStatus('error', 'Error');
-      setError('Could not reach ' + serverUrl + (fallbackUrl ? ' or fallback ' + fallbackUrl : '') + ' — ' + e.message);
+      setConn('error', 'Error');
+      setError('Could not reach bot: ' + e.message);
     }
   }
 
@@ -776,7 +1171,7 @@
     refreshTimer = setInterval(refresh, 3000);
   }
 
-  /* ── Event bindings ── */
+  /* ──────────────── Event bindings ──────────────── */
   btnSettings.addEventListener('click', openModal);
   btnCancel.addEventListener('click', closeModal);
   btnRefresh.addEventListener('click', () => { clearInterval(refreshTimer); startAutoRefresh(); });
@@ -786,54 +1181,28 @@
     modalErr.classList.add('hidden');
     saveSettings();
     if (!serverUrl) { modalErr.textContent = 'Server URL is required.'; modalErr.classList.remove('hidden'); return; }
-    // Detect Railway project management URLs (railway.com/project/…) — these are the
-    // Railway web console URLs, not the deployed service URL.
     if (isRailwayConsoleUrl(serverUrl)) {
-      modalErr.textContent =
-        'That looks like a Railway project management URL, not your deployed service URL. ' +
-        'Use the public domain assigned to your service, e.g. https://your-app.up.railway.app';
-      modalErr.classList.remove('hidden');
-      return;
+      modalErr.textContent = 'That\'s a Railway project URL, not your service URL. Use e.g. https://your-app.up.railway.app';
+      modalErr.classList.remove('hidden'); return;
     }
-    // Detect Vercel frontend URLs (*.vercel.app) — these host the dashboard UI only, not the bot backend.
-    if (isVercelFrontendUrl(serverUrl)) {
-      modalErr.textContent =
-        'That looks like a Vercel frontend URL, not a running bot backend. ' +
-        'Enter the URL where your SniperBot backend is running, e.g. https://your-app.up.railway.app';
-      modalErr.classList.remove('hidden');
-      return;
-    }
-    // Warn when a secret key is used over plain HTTP (not localhost) — credentials would be sent unencrypted.
-    if (secretKey && /^http:\/\//i.test(serverUrl) && !/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?=[:/]|$)/i.test(serverUrl)) {
-      modalErr.textContent =
-        '⚠ You are sending a secret key over an unencrypted HTTP connection. ' +
-        'Use HTTPS for remote servers to keep your credentials safe.';
-      modalErr.classList.remove('hidden');
-      // This is a warning, not a blocker — allow the user to proceed anyway.
-    }
-    btnSave.textContent = secretKey ? 'Connecting…' : 'Connecting wallet…';
+
+    btnSave.textContent = 'Connecting…';
     btnSave.disabled = true;
     try {
-      // If a secret key is set use it directly; otherwise fall back to wallet sign-in.
-      if (!secretKey && !sessionToken) {
-        await connectWalletSession();
-      }
-      try {
-        await fetchSummary();
-      } catch (fetchErr) {
-        // If the stored session token has expired, clear it and try a fresh wallet sign-in.
+      if (!secretKey && !sessionToken) await connectWalletSession();
+      try { await fetchSummary(); }
+      catch (fetchErr) {
         if (/Unauthorized/i.test(fetchErr.message) && !secretKey) {
           clearWalletSession();
           await connectWalletSession();
           await fetchSummary();
-        } else {
-          throw fetchErr;
-        }
+        } else throw fetchErr;
       }
       closeModal();
       startAutoRefresh();
+      toast('Connected to SniperBot', 'success');
     } catch (e) {
-      modalErr.textContent = 'Connection failed: ' + e.message;
+      modalErr.textContent = e.message;
       modalErr.classList.remove('hidden');
     } finally {
       btnSave.textContent = 'Save & Connect';
@@ -841,10 +1210,20 @@
     }
   });
 
-  /* ── Boot ── */
+  /* ──────────────── Boot ──────────────── */
   loadSettings();
-  if (serverUrl && (secretKey || sessionToken)) startAutoRefresh();
-  else openModal();
+  if (serverUrl && (secretKey || sessionToken)) {
+    startAutoRefresh();
+  } else if (serverUrl) {
+    // Auto-try connecting if only a URL is saved (no creds yet)
+    startAutoRefresh();
+  } else {
+    openModal();
+  }
+
+  // Make decision functions globally accessible for inline onclick handlers
+  window.approveDecision = approveDecision;
+  window.rejectDecision = rejectDecision;
 </script>
 </body>
 </html>
