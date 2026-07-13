@@ -5,6 +5,13 @@ TRADING_MODE=paper
 PORT=3000
 DASHBOARD_SECRET_KEY=devpreview
 
+# ── Live Feed ──
+# Set USE_LIVE_FEED=true to fetch real token prices from DexScreener + CoinGecko
+# instead of using the synthetic sin/cos price feed.
+# Requires COINGECKO_API_KEY for CoinGecko fallback (free tier: get at coingecko.com)
+USE_LIVE_FEED=false
+# COINGECKO_API_KEY=your_coingecko_api_key_here
+
 # ── RPC ──
 SOLANA_RPC_URL="https://mainnet.helius-rpc.com/?api-key=4b57cfd8-d4ce-4ee4-9d27-be254ac0a06f"
 SOLANA_WS_URL="wss://mainnet.helius-rpc.com/?api-key=4b57cfd8-d4ce-4ee4-9d27-be254ac0a06f"

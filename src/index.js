@@ -4,6 +4,7 @@ const { StrategyEngine } = require('./strategy/strategyEngine');
 const { PaperExecutor } = require('./execution/paperExecutor');
 const { SolanaLiveExecutor } = require('./execution/solanaLiveExecutor');
 const { createOpportunityFeed } = require('./market/opportunityFeed');
+const { createLiveFeed, createComprehensiveWatchlist } = require('./market/liveFeed');
 const { SolanaWatchlistFeed } = require('./market/solanaWatchlistFeed');
 const { PoolDiscoveryFeed } = require('./market/poolDiscoveryFeed');
 const { PaperTradingSimulator } = require('./simulator/paperTradingSimulator');
@@ -33,7 +34,11 @@ function buildApp(env = process.env) {
 }
 
 function buildOrchestrator({ stopOnGoal = true, persistedState = null, supabase = null } = {}) {
-  const feed = createOpportunityFeed();
+  // Use live feed when USE_LIVE_FEED=true, otherwise synthetic feed
+  const useLiveFeed = parseBoolean(process.env.USE_LIVE_FEED);
+  const feed = useLiveFeed
+    ? createLiveFeed(createComprehensiveWatchlist())
+    : createOpportunityFeed();
   const goalAgent = new GoalAgent();
   const patternAgent = new PatternAgent();
   const variantAgent = new StrategyVariantAgent({ feed });
