@@ -12,10 +12,11 @@ const RISK_CONFIG = {
   maxDailyLossPct: 0.50,
   maxDrawdownPct: 0.50,
 
-  // Safety filters
-  minLiquidityUsd: 25000,
+  // Safety filters (relaxed for real market data)
+  // Established tokens have lower momentum scores than the synthetic feed produced.
+  minLiquidityUsd: 10000,
   maxRugScore: 0.3,
-  minMomentumScore: 0.60,
+  minMomentumScore: 0.40,
   blockedTokenKeywords: ['honeypot', 'blacklist', 'tax-100', 'rug'],
   supportedVenues: ['solana/raydium', 'solana/pump.fun', 'bsc/pancakeswap'],
 
@@ -27,9 +28,10 @@ const RISK_CONFIG = {
   maxTopHolderPct: 0.5,
   safetyCacheTtlMs: 60_000,
 
-  // Entry edge requirement (relaxed for paper-mode synthetic feed)
-  minExpectedEdge: 0.20,
-  minRiskAdjustedScore: 0.10,
+  // Entry edge requirement (calibrated for real DexScreener market data)
+  // Real token prices produce smaller momentum/edge signals than the synthetic feed.
+  minExpectedEdge: 0.08,
+  minRiskAdjustedScore: 0.04,
 
   // Take-profit / stop-loss (R:R ~2.5:1 at mid confidence)
   // Adjusted for better random-walk survival — the previous 4.4:1 R:R gave
