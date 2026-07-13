@@ -1,5 +1,7 @@
 # SniperBot
 
+[![License: Proprietary](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+
 Strategic, learning-first sniper bot architecture for newly created pairs across:
 - Solana/Raydium
 - Solana/Pump.fun
@@ -9,6 +11,17 @@ This implementation is **paper-trading first** and starts simulation bankroll at
 It also includes an **opt-in Solana live-trading mode** for a curated Solana universe with optional automated watchlist selection and supervised execution.
 
 [![Deploy Dashboard to Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Darkhearted007/SniperBot)
+
+## Branch Strategy
+
+| Branch | Purpose | Deploys To |
+|--------|---------|------------|
+| **`main`** | Production — stable, reviewed code | Railway production & Vercel production |
+| **`develop`** | Development — active work, experimental changes | Railway staging & Vercel preview |
+
+1. Work on the `develop` branch
+2. Open a pull request to `main` when ready
+3. After review, merge to `main` for production deployment
 
 ## Core capabilities
 
