@@ -82,7 +82,7 @@ function readJsonBody(req) {
   });
 }
 
-function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
+function createDashboardServer({ simulator, logger, goalAgent, variantAgent, orchestrator }) {
   const secretKey = String(process.env.DASHBOARD_SECRET_KEY || '').trim();
   const allowedWallets = new Set(
     String(process.env.DASHBOARD_ALLOWED_WALLETS || '')
@@ -339,7 +339,26 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
       return;
     }
 
+    function getCouncilData() {
+      if (!orchestrator) return { councilDirectives: [], meetingHistory: [], memoryStats: {} };
+      return {
+        councilDirectives: (typeof orchestrator.councilAgent?.getActiveDirectives === 'function')
+          ? orchestrator.councilAgent.getActiveDirectives() : [],
+        meetingHistory: (typeof orchestrator.councilAgent?.getMeetingHistory === 'function')
+          ? orchestrator.councilAgent.getMeetingHistory() : [],
+        memoryStats: (typeof orchestrator.memoryStore?.getStats === 'function')
+          ? orchestrator.memoryStore.getStats() : {},
+        patternReport: (typeof orchestrator.memoryStore?.getPatternReport === 'function')
+          ? orchestrator.memoryStore.getPatternReport() : null,
+        lessons: (typeof orchestrator.memoryStore?.getLessons === 'function')
+          ? orchestrator.memoryStore.getLessons().slice(-20) : [],
+        proposal: (typeof orchestrator.memoryStore?.generateProposal === 'function')
+          ? orchestrator.memoryStore.generateProposal() : null
+      };
+    }
+
     if (pathname === '/dashboard') {
+      const councilData = getCouncilData();
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
         bankrollSol: simulator.state.bankrollSol,
@@ -352,7 +371,8 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
           drawdownPct: simulator.state.drawdownPct,
           circuitBreaker: simulator.state.circuitBreaker
         },
-        recentLogs: logger.all().slice(-25)
+        recentLogs: logger.all().slice(-25),
+        ...councilData
       }));
       return;
     }
@@ -360,8 +380,9 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
     if (pathname === '/agents') {
       const goalStatus = goalAgent ? goalAgent.summary(simulator.state) : null;
       const variantSummary = variantAgent ? variantAgent.getSummary() : null;
+      const councilData = getCouncilData();
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ goalStatus, variantSummary }));
+      res.end(JSON.stringify({ goalStatus, variantSummary, ...councilData }));
       return;
     }
 
@@ -369,6 +390,7 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
     if (pathname === '/summary') {
       const goalStatus = goalAgent ? goalAgent.summary(simulator.state) : null;
       const variantSummary = variantAgent ? variantAgent.getSummary() : null;
+      const councilData = getCouncilData();
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
         bankrollSol: simulator.state.bankrollSol,
@@ -383,8 +405,16 @@ function createDashboardServer({ simulator, logger, goalAgent, variantAgent }) {
         },
         recentLogs: logger.all().slice(-25),
         goalStatus,
-        variantSummary
+        variantSummary,
+        ...councilData
       }));
+      return;
+    }
+
+    // Dedicated council endpoint for detailed meeting history
+    if (pathname === '/council') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(getCouncilData()));
       return;
     }
 

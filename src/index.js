@@ -296,7 +296,8 @@ async function runMain(env = process.env, runtime = process) {
       simulator: orchestrator.mainSimulator,
       logger: orchestrator.logger,
       goalAgent,
-      variantAgent
+      variantAgent,
+      orchestrator
     });
     server.listen(port, () => {
       logEvent('info', 'dashboard-started', { port, mode: 'paper' });
