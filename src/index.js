@@ -88,7 +88,8 @@ async function buildLiveApp(env = process.env, persistedState = null) {
     swapApiBase: liveConfig.swapApiBase,
     slippageBps: liveConfig.slippageBps,
     minSolReserve: liveConfig.minSolReserve,
-    maxBankrollSol: liveConfig.maxBankrollSol
+    maxBankrollSol: liveConfig.maxBankrollSol,
+    jupiterApiKey: env.JUPITER_API_KEY
   });
   const feed = new SolanaWatchlistFeed({
     watchlist: liveConfig.watchlist,
@@ -115,7 +116,8 @@ async function buildLiveApp(env = process.env, persistedState = null) {
     ? new SolanaSafetyProvider({
       rpcUrl: liveConfig.rpcUrl,
       quoteApiBase: liveConfig.quoteApiBase,
-      cacheTtlMs: liveConfig.safetyCacheTtlMs
+      cacheTtlMs: liveConfig.safetyCacheTtlMs,
+      jupiterApiKey: env.JUPITER_API_KEY
     })
     : null;
 

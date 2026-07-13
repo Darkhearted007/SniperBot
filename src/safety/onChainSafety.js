@@ -72,7 +72,8 @@ class SolanaSafetyProvider {
     quoteApiBase,
     cacheTtlMs = DEFAULT_CACHE_TTL_MS,
     burnAddresses = KNOWN_BURN_ADDRESSES,
-    lockerProgramIds = KNOWN_LOCKER_PROGRAM_IDS
+    lockerProgramIds = KNOWN_LOCKER_PROGRAM_IDS,
+    jupiterApiKey
   }) {
     this.rpcUrl = rpcUrl;
     this.fetchImpl = fetchImpl;
@@ -80,6 +81,7 @@ class SolanaSafetyProvider {
     this.burnAddresses = new Set(burnAddresses);
     this.lockerProgramIds = new Set(lockerProgramIds);
     this.cache = new TtlCache(cacheTtlMs);
+    this.jupiterApiKey = jupiterApiKey;
   }
 
   async rpc(method, params) {
@@ -162,7 +164,8 @@ class SolanaSafetyProvider {
         inputMint: outputMint,
         outputMint: inputMint,
         amount: String(sellAmountRaw),
-        slippageBps
+        slippageBps,
+        apiKey: this.jupiterApiKey
       });
       const outAmount = Number(reverseQuote?.outAmount || 0);
       if (!(outAmount > 0)) {

@@ -15,7 +15,8 @@ class SolanaLiveExecutor {
     swapApiBase,
     slippageBps = 100,
     minSolReserve = 0.02,
-    maxBankrollSol = null
+    maxBankrollSol = null,
+    jupiterApiKey
   }) {
     this.client = client;
     this.fetchImpl = fetchImpl;
@@ -24,6 +25,7 @@ class SolanaLiveExecutor {
     this.slippageBps = slippageBps;
     this.minSolReserve = minSolReserve;
     this.maxBankrollSol = maxBankrollSol;
+    this.jupiterApiKey = jupiterApiKey;
   }
 
   async getActualFreeSol() {
@@ -56,13 +58,15 @@ class SolanaLiveExecutor {
       inputMint: opportunity.inputMint,
       outputMint: opportunity.outputMint,
       amount: String(inLamports),
-      slippageBps: this.slippageBps
+      slippageBps: this.slippageBps,
+      apiKey: this.jupiterApiKey
     });
     const swap = await fetchJupiterSwap({
       fetchImpl: this.fetchImpl,
       swapApiBase: this.swapApiBase,
       quoteResponse: quote,
-      userPublicKey: this.client.walletAddress
+      userPublicKey: this.client.walletAddress,
+      apiKey: this.jupiterApiKey
     });
     const { signature } = await this.client.signAndSendTransaction(swap.swapTransaction);
 
@@ -108,13 +112,15 @@ class SolanaLiveExecutor {
       inputMint: position.outputMint,
       outputMint: position.inputMint,
       amount: position.rawTokenAmount,
-      slippageBps: this.slippageBps
+      slippageBps: this.slippageBps,
+      apiKey: this.jupiterApiKey
     });
     const swap = await fetchJupiterSwap({
       fetchImpl: this.fetchImpl,
       swapApiBase: this.swapApiBase,
       quoteResponse: quote,
-      userPublicKey: this.client.walletAddress
+      userPublicKey: this.client.walletAddress,
+      apiKey: this.jupiterApiKey
     });
     const { signature } = await this.client.signAndSendTransaction(swap.swapTransaction);
 

@@ -26,7 +26,8 @@ async function fetchJupiterQuote({
   outputMint,
   amount,
   slippageBps,
-  swapMode = 'ExactIn'
+  swapMode = 'ExactIn',
+  apiKey
 }) {
   const url = new URL(`${trimTrailingSlash(quoteApiBase)}/quote`);
   url.searchParams.set('inputMint', inputMint);
@@ -35,9 +36,12 @@ async function fetchJupiterQuote({
   url.searchParams.set('slippageBps', String(slippageBps));
   url.searchParams.set('swapMode', swapMode);
 
-  const response = await fetchImpl(url, {
-    headers: { accept: 'application/json' }
-  });
+  const headers = { accept: 'application/json' };
+  if (apiKey) {
+    headers['x-api-key'] = apiKey;
+  }
+
+  const response = await fetchImpl(url, { headers });
   const quote = await readJson(response);
   if (!quote.outAmount || !quote.inAmount) {
     throw new Error('Jupiter quote response missing inAmount/outAmount');
@@ -49,14 +53,20 @@ async function fetchJupiterSwap({
   fetchImpl = fetch,
   swapApiBase = DEFAULT_JUPITER_SWAP_API,
   quoteResponse,
-  userPublicKey
+  userPublicKey,
+  apiKey
 }) {
+  const headers = {
+    'content-type': 'application/json',
+    accept: 'application/json'
+  };
+  if (apiKey) {
+    headers['x-api-key'] = apiKey;
+  }
+
   const response = await fetchImpl(`${trimTrailingSlash(swapApiBase)}/swap`, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json'
-    },
+    headers,
     body: JSON.stringify({
       quoteResponse,
       userPublicKey,
