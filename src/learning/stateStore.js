@@ -34,7 +34,11 @@ async function loadState(filePath, env = process.env) {
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === 'object' ? parsed : null;
   } catch (error) {
-    if (error.code === 'ENOENT') return null;
+    // Gracefully handle missing files (ENOENT) OR corrupted JSON (SyntaxError),
+    // so the bot can start fresh instead of crashing with a fatal error.
+    if (error.code === 'ENOENT' || error instanceof SyntaxError) {
+      return null;
+    }
     throw error;
   }
 }

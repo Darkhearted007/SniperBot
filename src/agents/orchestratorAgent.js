@@ -152,8 +152,12 @@ class OrchestratorAgent {
     this.adaptiveConfig = { ...this.adaptiveConfig, ...balancedConfig };
     this._syncAdaptiveConfig();
     // Reset circuit breaker with the new relaxed thresholds
+    // Also reset daily loss tracking so the bot isn't permanently blocked
+    // by previous-session losses (daily cap only resets at day boundaries).
     this.mainSimulator.state.circuitBreaker = false;
     this.mainSimulator.state.drawdownPct = 0;
+    this.mainSimulator.state.dailyLossPct = 0;
+    this.mainSimulator.state.realizedPnlTodaySol = 0;
 
     // 5. Advance main simulator
     this.mainSimulator.runCycle();
