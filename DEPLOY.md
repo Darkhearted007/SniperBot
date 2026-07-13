@@ -18,7 +18,7 @@
 
 ## Step 2: Set Environment Variables
 
-In the Railway dashboard, go to your project → **Variables** tab. Add all of these:
+In the Railway dashboard, go to your project → **Variables** tab. Do **not** commit secrets to git — set them as Railway environment variables instead.
 
 ### Core Mode
 | Variable | Value | Notes |
@@ -29,18 +29,18 @@ In the Railway dashboard, go to your project → **Variables** tab. Add all of t
 ### Solana RPC (Your Helius)
 | Variable | Value |
 |----------|-------|
-| `SOLANA_RPC_URL` | `https://mainnet.helius-rpc.com/?api-key=4b57cfd8-d4ce-4ee4-9d27-be254ac0a06f` |
-| `SOLANA_WS_URL` | `wss://mainnet.helius-rpc.com/?api-key=4b57cfd8-d4ce-4ee4-9d27-be254ac0a06f` |
+| `SOLANA_RPC_URL` | `https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY` |
+| `SOLANA_WS_URL` | `wss://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY` |
 
 ### Wallet (only for live mode — skip for paper)
 | Variable | Value |
 |----------|-------|
-| `SOLANA_WALLET_SECRET` | `[150,108,122,...full 64-byte array...]` |
+| `SOLANA_WALLET_SECRET` | Your 64-byte wallet private key as JSON array |
 
 ### Watchlist (Tokens to monitor)
 | Variable | Value |
 |----------|-------|
-| `SOLANA_WATCHLIST_JSON` | `[{"symbol":"JUP",...},...]` |
+| `SOLANA_WATCHLIST_JSON` | JSON array of token configs (symbol, tokenName, outputMint, decimals, liquidityUsd, rugScore) |
 
 ### Safety Guardrails
 | Variable | Value |
@@ -96,7 +96,7 @@ https://sniperbot.up.railway.app
 
 Open that URL in your browser and enter:
 - **Server URL**: `https://sniperbot.up.railway.app` (your Railway URL)
-- **Secret Key**: `devpreview` (or whatever you set `DASHBOARD_SECRET_KEY` to)
+- **Secret Key**: the value you set for `DASHBOARD_SECRET_KEY`
 
 ---
 
@@ -104,7 +104,7 @@ Open that URL in your browser and enter:
 
 When you're ready to trade live:
 
-1. Fund the wallet: `CQf2TBVCtKAjJw1mEGpEYPVn7MUgGJ87wP4esHJhftsF`
+1. Fund your wallet with SOL
 2. In Railway dashboard → **Variables**, change `TRADING_MODE=live`
 3. Railway auto-restarts the app
 
