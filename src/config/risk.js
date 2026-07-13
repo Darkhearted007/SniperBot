@@ -33,18 +33,20 @@ const RISK_CONFIG = {
   minExpectedEdge: 0.08,
   minRiskAdjustedScore: 0.04,
 
-  // Take-profit / stop-loss (R:R ~2.5:1 at mid confidence)
-  // Adjusted for better random-walk survival — the previous 4.4:1 R:R gave
-  // only ~18% win probability in driftless markets. The new values give ~29%
-  // which lets the strategy's edge signal produce positive expectancy.
+  // Take-profit / stop-loss
+  // The Agent Council found that direct SL exits have 0% win rate while
+  // trailing stops have 100% win rate. The fix: trail activates sooner
+  // (5% gain) with a tighter trail (4%), while SL is widened to 15% as
+  // an emergency safety net for catastrophic drops only.
   takeProfitBasePct: 0.16,
   takeProfitConfidenceScale: 0.22,
-  stopLossBasePct: 0.07,
-  stopLossConfidenceScale: 0.10,
+  stopLossBasePct: 0.15,
+  stopLossConfidenceScale: 0.08,
 
   // Trailing stop: activates once a position gains trailActivatePct
-  trailActivatePct: 0.10,
-  trailPct: 0.05,
+  // Lower activation + tighter trail = trailing stops become the PRIMARY exit
+  trailActivatePct: 0.05,
+  trailPct: 0.04,
 
   // Execution quality controls
   maxExpectedSlippageBps: 180,
@@ -99,15 +101,15 @@ const STRATEGY_VARIANTS = [
     minExpectedEdge: 0.25,
     minRiskAdjustedScore: 0.12,
     maxPositionPct: 0.10,
-    stopLossBasePct: 0.05,
-    stopLossConfidenceScale: 0.08,
+    stopLossBasePct: 0.12,
+    stopLossConfidenceScale: 0.06,
     takeProfitBasePct: 0.14,
     takeProfitConfidenceScale: 0.20,
     maxDailyLossPct: 0.08,
     maxDrawdownPct: 0.10,
     minLiquidityUsd: 50000,
-    trailActivatePct: 0.08,
-    trailPct: 0.04,
+    trailActivatePct: 0.04,
+    trailPct: 0.03,
     minRiskAdjustedScore: 0.2,
     maxExpectedSlippageBps: 120,
     maxVenueExposurePct: 0.4,
@@ -122,15 +124,15 @@ const STRATEGY_VARIANTS = [
     ...RISK_CONFIG,
     minExpectedEdge: 0.15,
     maxPositionPct: 0.20,
-    stopLossBasePct: 0.08,
-    stopLossConfidenceScale: 0.12,
+    stopLossBasePct: 0.18,
+    stopLossConfidenceScale: 0.10,
     takeProfitBasePct: 0.18,
     takeProfitConfidenceScale: 0.24,
     maxDailyLossPct: 0.15,
     maxDrawdownPct: 0.20,
     minLiquidityUsd: 15000,
-    trailActivatePct: 0.12,
-    trailPct: 0.06,
+    trailActivatePct: 0.06,
+    trailPct: 0.05,
     minRiskAdjustedScore: 0.12,
     maxExpectedSlippageBps: 220,
     maxVenueExposurePct: 0.65,
