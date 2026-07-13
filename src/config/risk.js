@@ -31,10 +31,13 @@ const RISK_CONFIG = {
   minExpectedEdge: 0.20,
   minRiskAdjustedScore: 0.10,
 
-  // Take-profit / stop-loss (asymmetric R:R ~6:1)
-  takeProfitBasePct: 0.25,
-  takeProfitConfidenceScale: 0.30,
-  stopLossBasePct: 0.05,
+  // Take-profit / stop-loss (R:R ~2.5:1 at mid confidence)
+  // Adjusted for better random-walk survival — the previous 4.4:1 R:R gave
+  // only ~18% win probability in driftless markets. The new values give ~29%
+  // which lets the strategy's edge signal produce positive expectancy.
+  takeProfitBasePct: 0.16,
+  takeProfitConfidenceScale: 0.22,
+  stopLossBasePct: 0.07,
   stopLossConfidenceScale: 0.10,
 
   // Trailing stop: activates once a position gains trailActivatePct
@@ -94,10 +97,10 @@ const STRATEGY_VARIANTS = [
     minExpectedEdge: 0.25,
     minRiskAdjustedScore: 0.12,
     maxPositionPct: 0.10,
-    stopLossBasePct: 0.04,
-    stopLossConfidenceScale: 0.06,
-    takeProfitBasePct: 0.40,
-    takeProfitConfidenceScale: 0.30,
+    stopLossBasePct: 0.05,
+    stopLossConfidenceScale: 0.08,
+    takeProfitBasePct: 0.14,
+    takeProfitConfidenceScale: 0.20,
     maxDailyLossPct: 0.08,
     maxDrawdownPct: 0.10,
     minLiquidityUsd: 50000,
@@ -117,10 +120,10 @@ const STRATEGY_VARIANTS = [
     ...RISK_CONFIG,
     minExpectedEdge: 0.15,
     maxPositionPct: 0.20,
-    stopLossBasePct: 0.07,
-    stopLossConfidenceScale: 0.10,
-    takeProfitBasePct: 0.25,
-    takeProfitConfidenceScale: 0.20,
+    stopLossBasePct: 0.08,
+    stopLossConfidenceScale: 0.12,
+    takeProfitBasePct: 0.18,
+    takeProfitConfidenceScale: 0.24,
     maxDailyLossPct: 0.15,
     maxDrawdownPct: 0.20,
     minLiquidityUsd: 15000,

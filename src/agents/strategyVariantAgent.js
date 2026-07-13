@@ -24,12 +24,13 @@ class StrategyVariantAgent {
 
   /**
    * Run one discovery cycle across all variants.
-   * @param {object} priceMap  - { [pair]: number } current prices for exit checks
+   * @param {object}   priceMap              - { [pair]: number } current prices for exit checks
+   * @param {object[]} [externalOpportunities] - Pre-fetched opportunities (avoids redundant feed.list() calls)
    */
-  runCycle(priceMap = {}) {
+  runCycle(priceMap = {}, externalOpportunities = null) {
     for (const inst of this.instances) {
       if (inst.simulator.state.circuitBreaker) continue;
-      inst.simulator.runCycle();
+      inst.simulator.runCycle(externalOpportunities);
       if (Object.keys(priceMap).length > 0) {
         inst.simulator.processMarketTick(priceMap);
       }

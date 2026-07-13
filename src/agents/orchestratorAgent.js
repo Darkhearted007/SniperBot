@@ -81,36 +81,20 @@ class OrchestratorAgent {
     this.activeVariantName = 'balanced';
     this.adaptiveConfig = { ...config };
 
-    // Price state for synthetic ticks
-    this._prices = {};
+    // Opportunites are fetched from the feed once per cycle in runCycle(),
+    // ensuring a single source of truth for prices across entry and exit.
     this._latestOpportunities = feed.list();
-    for (const opp of this._latestOpportunities) {
-      this._prices[opp.pair] = opp.price;
-    }
   }
 
   /**
-   * Advance prices using a momentum-biased random walk.
-   * Callers can also supply an explicit priceMap (e.g. from a real feed).
+   * Build a price map from the latest feed opportunities.
+   * This is the single source of truth for prices — entry and exit checks
+   * both use the feed's deterministic price trajectory, eliminating the
+   * previous desync between the orchestrator's independent this._prices
+   * and the feed's internal price state.
    */
-  tickPrices(externalPriceMap = null) {
-    this._latestOpportunities = this.feed.list();
-    if (externalPriceMap) {
-      this._prices = { ...this._prices, ...externalPriceMap };
-      return { ...this._prices };
-    }
-    const opps = this._latestOpportunities;
-    for (const opp of opps) {
-      const momentum = opp.momentumScore - 0.5; // bias: positive momentum → upward drift
-      const volatility = opp.volatilityRisk;
-      const drift = momentum * 0.04;
-      const noise = (Math.random() - 0.5) * volatility * 0.15;
-      this._prices[opp.pair] = Math.max(
-        1e-8,
-        this._prices[opp.pair] * (1 + drift + noise)
-      );
-    }
-    return { ...this._prices };
+  _buildPriceMap(opportunities) {
+    return Object.fromEntries(opportunities.map((o) => [o.pair, o.price]));
   }
 
   /**
@@ -120,8 +104,22 @@ class OrchestratorAgent {
    */
   runCycle(externalPriceMap = null) {
     this.cycleCount += 1;
-    const priceMap = this.tickPrices(externalPriceMap);
-    this.currentRegime = this._detectRegime(this._latestOpportunities);
+
+    // Fetch opportunities ONCE per cycle — the feed is the single source of truth.
+    // Previously, feed.list() was called multiple times per cycle (in tickPrices,
+    // runCycle, variant agents), advancing prices inconsistently and causing the
+    // orchestrator's this._prices to diverge from the feed's internal prices.
+    const opportunities = this.feed.list();
+    this._latestOpportunities = opportunities;
+
+    // Build the price map from the feed's actual prices.
+    // This eliminates the old dual-price-system bug where entry used the feed's
+    // deterministic sin/cos prices while exit used the orchestrator's random walk.
+    const priceMap = externalPriceMap
+      ? { ...externalPriceMap, ...this._buildPriceMap(opportunities) }
+      : this._buildPriceMap(opportunities);
+
+    this.currentRegime = this._detectRegime(opportunities);
 
     // 1. Goal check — hard stop
     const goalStatus = this.goalAgent.checkGoal(this.mainSimulator.state);
@@ -135,8 +133,9 @@ class OrchestratorAgent {
       };
     }
 
-    // 2. Advance all variant simulators for pattern discovery
-    const variantSummary = this.variantAgent.runCycle(priceMap);
+    // 2. Advance all variant simulators for pattern discovery.
+    //    Pass the same opportunities so variant simulators don't call feed.list() again.
+    const variantSummary = this.variantAgent.runCycle(priceMap, opportunities);
 
     // 3. Analyse accumulated patterns from variant trade logs
     const allVariantLogs = this.variantAgent.instances
@@ -159,8 +158,9 @@ class OrchestratorAgent {
     this.mainSimulator.state.dailyLossPct = 0;
     this.mainSimulator.state.realizedPnlTodaySol = 0;
 
-    // 5. Advance main simulator
-    this.mainSimulator.runCycle();
+    // 5. Advance main simulator — pass the same opportunities so it doesn't
+    //    call feed.list() again and desync prices.
+    this.mainSimulator.runCycle(opportunities);
     this.mainSimulator.processMarketTick(priceMap);
 
     // 6. Final goal re-check (position may have exited this cycle)

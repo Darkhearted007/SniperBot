@@ -82,8 +82,12 @@ class PaperTradingSimulator {
     }
   }
 
-  runCycle() {
-    const opportunities = this.feed.list();
+  runCycle(externalOpportunities = null) {
+    // When external opportunities are provided (e.g. from the orchestrator),
+    // use them instead of calling feed.list(). This ensures a single source
+    // of truth for prices in each orchestration cycle and eliminates desync
+    // between the feed's price system and the orchestrator's price map.
+    const opportunities = externalOpportunities || this.feed.list();
     opportunities.forEach((opp) => this.processOpportunity(opp));
     return this.state;
   }
