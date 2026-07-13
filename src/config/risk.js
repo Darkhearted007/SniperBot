@@ -4,8 +4,8 @@ const RISK_CONFIG = {
   goalSol: 2.0,
   goalDurationMs: 24 * 60 * 60 * 1000,
 
-  // Position sizing
-  maxPositionPct: 0.15,
+  // Position sizing (council: increase to 0.195 — 100% win rate justifies larger allocation)
+  maxPositionPct: 0.195,
   maxSlippagePct: 0.08,
 
   // Daily / drawdown guards (relaxed for paper-mode exploration)
@@ -16,7 +16,8 @@ const RISK_CONFIG = {
   // Established tokens have lower momentum scores than the synthetic feed produced.
   minLiquidityUsd: 10000,
   maxRugScore: 0.3,
-  minMomentumScore: 0.40,
+  // Council directive: raise minMomentumScore to 0.65 — high momentum (>0.75) shows 98.5% win rate
+  minMomentumScore: 0.65,
   blockedTokenKeywords: ['honeypot', 'blacklist', 'tax-100', 'rug'],
   supportedVenues: ['solana/raydium', 'solana/pump.fun', 'bsc/pancakeswap'],
 
@@ -59,10 +60,11 @@ const RISK_CONFIG = {
   maxCorrelatedPairExposurePct: 0.3,
 
   // Regime adaptation
+  // Council directive: increase aggression in bear (100% win rate) and bull (96.9% win rate)
   regimeMultipliers: {
-    bull: 1.12,
+    bull: 1.15,
     chop: 0.92,
-    bear: 0.78
+    bear: 0.95
   },
   volatilityRegimeMultipliers: {
     low: 1.05,
@@ -100,7 +102,8 @@ const STRATEGY_VARIANTS = [
     ...RISK_CONFIG,
     minExpectedEdge: 0.25,
     minRiskAdjustedScore: 0.12,
-    maxPositionPct: 0.10,
+    maxPositionPct: 0.12,
+    minMomentumScore: 0.55,
     stopLossBasePct: 0.12,
     stopLossConfidenceScale: 0.06,
     takeProfitBasePct: 0.14,
@@ -123,7 +126,8 @@ const STRATEGY_VARIANTS = [
     name: 'aggressive',
     ...RISK_CONFIG,
     minExpectedEdge: 0.15,
-    maxPositionPct: 0.20,
+    maxPositionPct: 0.25,
+    minMomentumScore: 0.70,
     stopLossBasePct: 0.18,
     stopLossConfidenceScale: 0.10,
     takeProfitBasePct: 0.18,
