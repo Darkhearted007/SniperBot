@@ -7,7 +7,7 @@ DASHBOARD_SECRET_KEY=devpreview
 
 # ── Live Feed ──
 # Fetches real token prices from DexScreener (primary, free) + CoinGecko (fallback)
-USE_LIVE_FEED=false
+USE_LIVE_FEED=true
 COINGECKO_API_KEY=CG-KnGMgqzTWw4hwVeFTzEq6KdN
 
 # ── Jupiter API (authenticated quotes) ──
