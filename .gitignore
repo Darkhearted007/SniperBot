@@ -10,6 +10,9 @@ node_modules/
 sniperbot-state.json
 tunnel-status.json
 
+# ── Secrets (API keys, wallet keys, RPC keys) ───────────────────────────────
+start.sh
+
 # ── Build Output ─────────────────────────────────────────────────────────────
 public/
 
