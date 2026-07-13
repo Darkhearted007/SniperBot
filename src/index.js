@@ -37,6 +37,9 @@ function buildOrchestrator({ stopOnGoal = true, persistedState = null, supabase 
   const goalAgent = new GoalAgent();
   const patternAgent = new PatternAgent();
   const variantAgent = new StrategyVariantAgent({ feed });
+
+  // Build the Agent Council with MemoryStore — persistent memory for
+  // trade recall, pattern mining, and strategic meetings.
   const orchestrator = new OrchestratorAgent({
     feed,
     goalAgent,
@@ -44,10 +47,19 @@ function buildOrchestrator({ stopOnGoal = true, persistedState = null, supabase 
     variantAgent,
     stopOnGoal
   });
+
   if (persistedState?.orchestrator) {
     orchestrator.restore(persistedState.orchestrator);
   }
-  return { orchestrator, goalAgent, variantAgent, patternAgent };
+
+  return {
+    orchestrator,
+    goalAgent,
+    variantAgent,
+    patternAgent,
+    councilAgent: orchestrator.councilAgent,
+    memoryStore: orchestrator.memoryStore
+  };
 }
 
 async function buildLiveApp(env = process.env, persistedState = null) {
